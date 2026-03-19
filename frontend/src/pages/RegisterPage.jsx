@@ -15,6 +15,7 @@ const initialForm = {
   email: "",
   password: "",
   phone: "",
+  referral_code: "",
 };
 
 function RegisterPage() {
@@ -49,6 +50,7 @@ function RegisterPage() {
           password: form.password,
           role: "student",
           phone: form.phone.trim(),
+          referral_code: form.referral_code.trim(),
         },
       });
       setSuccess("Registration completed. You can log in now.");
@@ -77,6 +79,7 @@ function RegisterPage() {
         name: form.name.trim(),
         role: "student",
         phone: form.phone.trim(),
+        referral_code: form.referral_code.trim(),
       });
       navigate(getRoleHomePath(session.user.role), { replace: true });
     } catch (requestError) {
@@ -104,6 +107,7 @@ function RegisterPage() {
               Create your account to pick an exam, take your first free 30-question mock test, and
               build improvement from every report.
             </p>
+            <p>New accounts receive a welcome token bonus, and referrals reward the inviter.</p>
             <div className="auth-login-proof auth-register-proof">
               <div className="auth-login-proof-card">
                 <strong>First test free</strong>
@@ -161,6 +165,17 @@ function RegisterPage() {
                   onChange={handleChange}
                   autoComplete="new-password"
                   required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="referral_code">Referral code</label>
+                <Input
+                  id="referral_code"
+                  name="referral_code"
+                  size="large"
+                  value={form.referral_code}
+                  onChange={handleChange}
+                  placeholder="Optional referral code"
                 />
               </div>
 

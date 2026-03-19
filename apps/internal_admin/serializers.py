@@ -15,6 +15,8 @@ from apps.internal_admin.services import (
     validate_template_constraints,
 )
 from apps.students.models import StudentProfile
+from apps.users.models import TokenSettings, TokenTransaction
+from apps.users.services import credit_tokens_by_admin, get_token_settings, grant_welcome_tokens_if_eligible, serialize_token_settings
 
 User = get_user_model()
 
@@ -76,6 +78,8 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     school_name = serializers.CharField(source="student_profile.school_name", read_only=True)
     relationship_to_student = serializers.CharField(source="guardian_profile.relationship_to_student", read_only=True)
     linked_students = serializers.SerializerMethodField()
+    referred_by_email = serializers.EmailField(source="referred_by.email", read_only=True)
+    referral_count = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -87,6 +91,10 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             "is_active",
             "is_verified",
             "is_staff",
+            "token_balance",
+            "referral_code",
+            "referred_by_email",
+            "referral_count",
             "created_at",
             "name",
             "class_name",
@@ -107,6 +115,9 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         if obj.role != User.Role.GUARDIAN or not hasattr(obj, "guardian_profile"):
             return 0
         return obj.guardian_profile.student_links.filter(status=GuardianStudentLink.Status.ACTIVE).count()
+
+    def get_referral_count(self, obj):
+        return obj.referrals.count()
 
 
 class AdminUserCreateSerializer(serializers.Serializer):
@@ -170,6 +181,7 @@ class AdminUserCreateSerializer(serializers.Serializer):
                 relationship_to_student=validated_data.get("relationship_to_student") or "",
             )
 
+        user = grant_welcome_tokens_if_eligible(user)
         return user
 
 
@@ -184,9 +196,13 @@ class AdminUserUpdateSerializer(serializers.Serializer):
     primary_target_exam = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     secondary_target_exam = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     relationship_to_student = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    token_adjustment = serializers.IntegerField(required=False)
+    token_adjustment_note = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
 
     def update(self, instance, validated_data):
         user_fields = []
+        token_adjustment = validated_data.pop("token_adjustment", 0)
+        token_adjustment_note = validated_data.pop("token_adjustment_note", "")
         for field in ["phone", "is_active", "is_verified"]:
             if field in validated_data:
                 setattr(instance, field, validated_data[field] if validated_data[field] is not None else "")
@@ -228,7 +244,37 @@ class AdminUserUpdateSerializer(serializers.Serializer):
 
         if user_fields:
             instance.save(update_fields=user_fields + ["updated_at"])
+        if token_adjustment:
+            admin_user = self.context["request"].user
+            instance = credit_tokens_by_admin(instance, token_adjustment, admin_user, note=token_adjustment_note or "")
         return instance
+
+
+class AdminTokenSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TokenSettings
+        fields = ["initial_login_bonus", "referral_bonus", "weak_topic_unlock_cost", "timer_reset_cost", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+
+class AdminTokenTransactionSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
+
+    class Meta:
+        model = TokenTransaction
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "transaction_type",
+            "amount",
+            "balance_after",
+            "note",
+            "metadata",
+            "created_by_email",
+            "created_at",
+        ]
 
 
 class AdminSubjectSerializer(serializers.ModelSerializer):
@@ -1599,6 +1645,7 @@ class AdminDashboardSerializer(serializers.Serializer):
     attempts_total = serializers.IntegerField()
     completed_attempts_total = serializers.IntegerField()
     guardian_links_total = serializers.IntegerField()
+    tokens_in_circulation = serializers.IntegerField()
     recent_users = AdminUserListSerializer(many=True)
     recent_attempts = serializers.SerializerMethodField()
 

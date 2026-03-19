@@ -61,7 +61,8 @@ async function refreshAccessToken(session) {
 export async function apiRequest(path, { method = "GET", token, body } = {}) {
   const storedSession = readStoredSession();
   const activeToken = storedSession?.access || token;
-  const headers = { ...JSON_HEADERS };
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const headers = isFormData ? {} : { ...JSON_HEADERS };
   if (activeToken) {
     headers.Authorization = `Bearer ${activeToken}`;
   }
@@ -69,7 +70,7 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
   let response = await fetch(resolveUrl(path), {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
   });
 
   if (response.status === 401 && (activeToken || storedSession?.refresh)) {
@@ -81,7 +82,7 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
           ...headers,
           Authorization: `Bearer ${refreshedToken}`,
         },
-        body: body ? JSON.stringify(body) : undefined,
+        body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
       });
     }
   }

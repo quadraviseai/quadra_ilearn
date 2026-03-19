@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
@@ -17,6 +17,8 @@ from apps.internal_admin.serializers import (
     AdminChapterSerializer,
     AdminConceptSerializer,
     AdminDashboardSerializer,
+    AdminTokenSettingsSerializer,
+    AdminTokenTransactionSerializer,
     AdminGeneratedQuestionSaveSerializer,
     AdminQuestionSerializer,
     AdminQuestionJsonImportSerializer,
@@ -30,6 +32,8 @@ from apps.internal_admin.serializers import (
     AdminUserUpdateSerializer,
 )
 from apps.internal_admin.services import QuestionGenerationError
+from apps.users.models import TokenTransaction
+from apps.users.services import get_token_settings
 
 User = get_user_model()
 
@@ -59,6 +63,7 @@ class AdminDashboardView(APIView):
             "attempts_total": TestAttempt.objects.count(),
             "completed_attempts_total": TestAttempt.objects.exclude(status=TestAttempt.Status.STARTED).count(),
             "guardian_links_total": GuardianStudentLink.objects.filter(status=GuardianStudentLink.Status.ACTIVE).count(),
+            "tokens_in_circulation": User.objects.aggregate(total=Sum("token_balance"))["total"] or 0,
             "recent_users": recent_users,
             "recent_attempts": recent_attempts,
         }
@@ -87,7 +92,7 @@ class AdminUserDetailView(APIView):
 
     def patch(self, request, user_id):
         user = get_object_or_404(User.objects.select_related("student_profile", "guardian_profile"), id=user_id)
-        serializer = AdminUserUpdateSerializer(data=request.data, partial=True)
+        serializer = AdminUserUpdateSerializer(data=request.data, partial=True, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.update(user, serializer.validated_data)
         return Response(AdminUserListSerializer(user).data)
@@ -543,3 +548,27 @@ class AdminQuestionDetailView(APIView):
         question = get_object_or_404(Question, id=question_id)
         question.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminTokenSettingsView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        serializer = AdminTokenSettingsSerializer(get_token_settings())
+        return Response(serializer.data)
+
+    def patch(self, request):
+        settings = get_token_settings()
+        serializer = AdminTokenSettingsSerializer(settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class AdminUserTokenTransactionListView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def get(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        transactions = user.token_transactions.select_related("created_by").all()[:50]
+        return Response(AdminTokenTransactionSerializer(transactions, many=True).data)

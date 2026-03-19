@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Picker } from "@react-native-picker/picker";
+import { useRouter } from "expo-router";
 
-import { useLocalSearchParams } from "expo-router";
 import AppHeader from "../../src/components/AppHeader";
 import Screen from "../../src/components/Screen";
 import SectionCard from "../../src/components/SectionCard";
 import { apiRequest } from "../../src/lib/api";
+import { getSelectedFlow, setSelectedFlow } from "../../src/lib/studentFlow";
 import { colors, radii, shadows, spacing } from "../../src/theme";
 
 function buildAnswerMap(questions) {
@@ -22,115 +24,101 @@ function buildAnswerMap(questions) {
 }
 
 export default function StudentDiagnosticsScreen() {
-  const params = useLocalSearchParams();
+  const router = useRouter();
   const [state, setState] = useState({
     loading: true,
     subjects: [],
-    profileExamNames: [],
-    selectedExamId: "",
     selectedSubjectId: "",
-    starting: false,
+    selectedExamId: "",
     error: "",
-    startedAttempt: null,
-    attemptDetail: null,
+    starting: false,
+    attempt: null,
     answers: {},
-    currentQuestionIndex: 0,
+    currentIndex: 0,
     submitting: false,
-    submitError: "",
-    submitResult: null,
+    result: null,
   });
 
-  const loadSubjects = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const [subjects, profile] = await Promise.all([
+      const [subjects, profile, selection] = await Promise.all([
         apiRequest("/api/diagnostic/subjects"),
         apiRequest("/api/students/profile"),
+        getSelectedFlow(),
       ]);
-      const profileExamNames = [profile.primary_target_exam, profile.secondary_target_exam].filter(Boolean);
-      const preselectedSubject = String(params.subject_id || "");
-      const preferredExamName = String(params.exam || "");
-      const activeSubject =
-        subjects.find((subject) => String(subject.id) === preselectedSubject) || subjects[0] || null;
-      const preferredExam =
-        activeSubject?.exams?.find((exam) => exam.name === preferredExamName)
-        || activeSubject?.exams?.find((exam) => profileExamNames.includes(exam.name))
-        || activeSubject?.exams?.[0]
+      const preferredExamNames = [profile.primary_target_exam, profile.secondary_target_exam].filter(Boolean);
+      const selectedSubject =
+        subjects.find((subject) => String(subject.id) === String(selection.subjectId)) || subjects[0] || null;
+      const selectedExam =
+        selectedSubject?.exams?.find((exam) => String(exam.id) === String(selection.examId))
+        || selectedSubject?.exams?.find((exam) => preferredExamNames.includes(exam.name))
+        || selectedSubject?.exams?.[0]
         || null;
 
       setState((current) => ({
         ...current,
         loading: false,
-        subjects,
-        profileExamNames,
-        selectedExamId: String(preferredExam?.id || current.selectedExamId || ""),
-        selectedSubjectId: preselectedSubject || current.selectedSubjectId || String(subjects[0]?.id || ""),
         error: "",
+        subjects,
+        selectedSubjectId: String(selectedSubject?.id || ""),
+        selectedExamId: String(selectedExam?.id || ""),
       }));
     } catch (error) {
       setState((current) => ({
         ...current,
         loading: false,
-        subjects: [],
-        profileExamNames: [],
         error: error.message,
+        subjects: [],
       }));
     }
-  }, [params.exam, params.subject_id]);
+  }, []);
 
   useEffect(() => {
-    loadSubjects();
-  }, [loadSubjects]);
+    load();
+  }, [load]);
 
-  const selectedSubject = state.subjects.find((subject) => String(subject.id) === state.selectedSubjectId);
+  const selectedSubject = state.subjects.find((item) => String(item.id) === state.selectedSubjectId) || null;
   const examOptions = selectedSubject?.exams || [];
-  const selectedExam = examOptions.find((exam) => String(exam.id) === state.selectedExamId);
-  const questions = state.attemptDetail?.questions || [];
-  const currentQuestion = questions[state.currentQuestionIndex] || null;
-  const answeredCount = questions.filter((question) => {
-    const answer = state.answers[question.id];
-    return Boolean(answer?.selected_option_id || answer?.answer_text?.trim());
-  }).length;
-  const totalQuestions = questions.length;
-  const isLastQuestion = totalQuestions > 0 && state.currentQuestionIndex === totalQuestions - 1;
+  const currentQuestion = state.attempt?.questions?.[state.currentIndex] || null;
+  const totalQuestions = state.attempt?.questions?.length || 0;
+  const isLastQuestion = totalQuestions > 0 && state.currentIndex === totalQuestions - 1;
+
+  const answeredCount = useMemo(
+    () =>
+      Object.values(state.answers).filter((answer) => Boolean(answer.selected_option_id || answer.answer_text?.trim())).length,
+    [state.answers],
+  );
 
   const startDiagnostic = async () => {
-    if (!state.selectedExamId) {
-      setState((current) => ({ ...current, error: "Choose an exam first." }));
-      return;
-    }
-    if (!state.selectedSubjectId) {
-      setState((current) => ({ ...current, error: "Choose a subject first." }));
+    if (!state.selectedSubjectId || !state.selectedExamId) {
+      setState((current) => ({ ...current, error: "Choose both subject and exam before starting." }));
       return;
     }
 
     try {
-      setState((current) => ({
-        ...current,
-        starting: true,
-        error: "",
-        submitError: "",
-        submitResult: null,
-      }));
-      const attempt = await apiRequest("/api/diagnostic/start", {
+      setState((current) => ({ ...current, starting: true, error: "", result: null }));
+      await setSelectedFlow(state.selectedExamId, state.selectedSubjectId);
+      const attempt = await apiRequest("/api/diagnostic/attempts/start", {
         method: "POST",
-        body: { subject_id: state.selectedSubjectId, exam_id: state.selectedExamId },
+        body: {
+          exam_id: state.selectedExamId,
+          subject_id: state.selectedSubjectId,
+        },
       });
       const attemptDetail = await apiRequest(`/api/diagnostic/attempts/${attempt.id}`);
       setState((current) => ({
         ...current,
         starting: false,
-        error: "",
-        startedAttempt: attempt,
-        attemptDetail,
+        attempt: attemptDetail,
         answers: buildAnswerMap(attemptDetail.questions || []),
-        currentQuestionIndex: 0,
+        currentIndex: 0,
       }));
     } catch (error) {
       setState((current) => ({ ...current, starting: false, error: error.message }));
     }
   };
 
-  const handleOptionSelect = (questionId, optionId) => {
+  const updateOption = (questionId, optionId) => {
     setState((current) => ({
       ...current,
       answers: {
@@ -144,7 +132,7 @@ export default function StudentDiagnosticsScreen() {
     }));
   };
 
-  const handleAnswerText = (questionId, value) => {
+  const updateText = (questionId, value) => {
     setState((current) => ({
       ...current,
       answers: {
@@ -158,14 +146,13 @@ export default function StudentDiagnosticsScreen() {
     }));
   };
 
-  const handleSubmit = async () => {
-    if (!state.startedAttempt?.id) {
+  const submit = async () => {
+    if (!state.attempt?.id) {
       return;
     }
-
     try {
-      setState((current) => ({ ...current, submitting: true, submitError: "" }));
-      const result = await apiRequest(`/api/diagnostic/attempts/${state.startedAttempt.id}/submit`, {
+      setState((current) => ({ ...current, submitting: true, error: "" }));
+      const result = await apiRequest(`/api/diagnostic/attempts/${state.attempt.id}/submit`, {
         method: "POST",
         body: {
           answers: Object.values(state.answers).map((answer) => ({
@@ -175,321 +162,255 @@ export default function StudentDiagnosticsScreen() {
           })),
         },
       });
-      setState((current) => ({
-        ...current,
-        submitting: false,
-        submitError: "",
-        submitResult: result,
-      }));
+      setState((current) => ({ ...current, submitting: false, result }));
     } catch (error) {
-      setState((current) => ({ ...current, submitting: false, submitError: error.message }));
+      setState((current) => ({ ...current, submitting: false, error: error.message }));
     }
   };
 
   return (
-    <Screen loading={state.loading} refreshControl={loadSubjects}>
-      <AppHeader
-        title="Diagnostic"
-        subtitle="Choose the exam lens and subject before creating the next attempt."
-      />
+    <Screen loading={state.loading} refreshControl={load}>
+      <AppHeader title="Diagnostic" subtitle="Choose the active subject and exam, then complete the full attempt from mobile." />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
-      <SectionCard title="Exam" subtitle="Use the exam that matches the target you are currently preparing for." tone="accent">
-        {examOptions.length ? (
-          <View style={styles.choiceWrap}>
-            {examOptions.map((exam) => {
-              const isSelected = String(exam.id) === state.selectedExamId;
-              return (
-                <Pressable
-                  key={exam.id}
-                  style={[styles.choiceChip, isSelected ? styles.choiceChipActive : null]}
-                  onPress={() => setState((current) => ({ ...current, selectedExamId: String(exam.id), error: "" }))}
+      {!state.attempt ? (
+        <>
+          <SectionCard title="Subject and exam" subtitle="This selection is reused by report, learning, and payment sections.">
+            <View style={styles.pickerGroup}>
+              <Text style={styles.label}>Subject</Text>
+              <View style={styles.pickerWrap}>
+                <Picker
+                  selectedValue={state.selectedSubjectId}
+                  onValueChange={(value) => {
+                    const nextSubject = state.subjects.find((subject) => String(subject.id) === String(value));
+                    const nextExam = nextSubject?.exams?.[0] || null;
+                    setState((current) => ({
+                      ...current,
+                      selectedSubjectId: String(value),
+                      selectedExamId: String(nextExam?.id || ""),
+                      error: "",
+                    }));
+                  }}
+                  style={styles.picker}
                 >
-                  <Text style={[styles.choiceText, isSelected ? styles.choiceTextActive : null]}>{exam.name}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : (
-          <Text style={styles.meta}>This subject does not have exam-linked diagnostic questions yet.</Text>
-        )}
-      </SectionCard>
-
-      <SectionCard title="Subject" subtitle="Select the subject you want this diagnostic to cover.">
-        <View style={styles.subjectList}>
-          {state.subjects.map((subject) => {
-            const isSelected = String(subject.id) === state.selectedSubjectId;
-            return (
-              <Pressable
-                key={subject.id}
-                style={[styles.subjectRow, isSelected ? styles.subjectRowActive : null]}
-                onPress={() => {
-                  const nextExam =
-                    subject.exams?.find((exam) => state.profileExamNames.includes(exam.name))
-                    || subject.exams?.[0]
-                    || null;
-                  setState((current) => ({
-                    ...current,
-                    selectedSubjectId: String(subject.id),
-                    selectedExamId: String(nextExam?.id || ""),
-                    error: "",
-                  }));
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.subjectName}>{subject.name}</Text>
-                  <Text style={styles.meta}>{subject.question_count} active questions</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Pressable
-          style={[styles.button, (!state.selectedExamId || !state.selectedSubjectId || state.starting) ? styles.buttonDisabled : null]}
-          disabled={!state.selectedExamId || !state.selectedSubjectId || state.starting}
-          onPress={startDiagnostic}
-        >
-          <Text style={styles.buttonText}>{state.starting ? "Starting..." : "Start diagnostic"}</Text>
-        </Pressable>
-      </SectionCard>
-
-      {state.startedAttempt ? (
-        <SectionCard title="Attempt" subtitle="Your exam-specific diagnostic is now active.">
-          <Text style={styles.meta}>Exam: {state.startedAttempt.exam_name || selectedExam?.name || "Not set"}</Text>
-          <Text style={styles.meta}>Subject: {state.startedAttempt.subject_name}</Text>
-          <Text style={styles.meta}>Progress: {answeredCount}/{totalQuestions} answered</Text>
-        </SectionCard>
-      ) : null}
-
-      {currentQuestion ? (
-        <SectionCard title={`Question ${state.currentQuestionIndex + 1} of ${totalQuestions}`} subtitle={currentQuestion.concept_name || "General concept"} tone="accent">
-          <Text style={styles.questionTitle}>{currentQuestion.prompt}</Text>
-
-          {currentQuestion.options?.length ? (
-            <View style={styles.optionsWrap}>
-              {currentQuestion.options.map((option) => {
-                const isSelected = state.answers[currentQuestion.id]?.selected_option_id === option.id;
-                return (
-                  <Pressable
-                    key={option.id}
-                    style={[styles.optionRow, isSelected ? styles.optionRowActive : null]}
-                    onPress={() => handleOptionSelect(currentQuestion.id, option.id)}
-                  >
-                    <View style={[styles.optionDot, isSelected ? styles.optionDotActive : null]} />
-                    <Text style={[styles.optionText, isSelected ? styles.optionTextActive : null]}>{option.option_text}</Text>
-                  </Pressable>
-                );
-              })}
+                  {state.subjects.map((subject) => (
+                    <Picker.Item key={subject.id} label={subject.name} value={String(subject.id)} />
+                  ))}
+                </Picker>
+              </View>
             </View>
-          ) : (
-            <TextInput
-              style={styles.input}
-              placeholder="Type your answer"
-              value={state.answers[currentQuestion.id]?.answer_text || ""}
-              onChangeText={(value) => handleAnswerText(currentQuestion.id, value)}
-            />
-          )}
 
-          <View style={styles.navRow}>
+            <View style={styles.pickerGroup}>
+              <Text style={styles.label}>Exam</Text>
+              <View style={styles.pickerWrap}>
+                <Picker
+                  selectedValue={state.selectedExamId}
+                  onValueChange={(value) => setState((current) => ({ ...current, selectedExamId: String(value), error: "" }))}
+                  style={styles.picker}
+                >
+                  {examOptions.length ? (
+                    examOptions.map((exam) => (
+                      <Picker.Item key={exam.id} label={exam.name} value={String(exam.id)} />
+                    ))
+                  ) : (
+                    <Picker.Item label="No exam available" value="" />
+                  )}
+                </Picker>
+              </View>
+            </View>
+
             <Pressable
-              style={[styles.secondaryButton, state.currentQuestionIndex === 0 ? styles.buttonDisabled : null]}
-              disabled={state.currentQuestionIndex === 0}
-              onPress={() =>
-                setState((current) => ({
-                  ...current,
-                  currentQuestionIndex: Math.max(current.currentQuestionIndex - 1, 0),
-                }))
-              }
+              style={[styles.primaryButton, (!state.selectedSubjectId || !state.selectedExamId || state.starting) ? styles.disabled : null]}
+              disabled={!state.selectedSubjectId || !state.selectedExamId || state.starting}
+              onPress={startDiagnostic}
             >
-              <Text style={styles.secondaryButtonText}>Previous</Text>
+              <Text style={styles.primaryButtonText}>{state.starting ? "Starting..." : "Start diagnostic"}</Text>
             </Pressable>
-
-            {isLastQuestion ? (
-              <Pressable
-                style={[styles.button, state.submitting ? styles.buttonDisabled : null]}
-                disabled={state.submitting}
-                onPress={handleSubmit}
-              >
-                <Text style={styles.buttonText}>{state.submitting ? "Submitting..." : "Submit answers"}</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={styles.button}
-                onPress={() =>
-                  setState((current) => ({
-                    ...current,
-                    currentQuestionIndex: Math.min(current.currentQuestionIndex + 1, totalQuestions - 1),
-                  }))
-                }
-              >
-                <Text style={styles.buttonText}>Next</Text>
-              </Pressable>
-            )}
-          </View>
-        </SectionCard>
+          </SectionCard>
+        </>
       ) : null}
 
-      {state.submitError ? <Text style={styles.error}>{state.submitError}</Text> : null}
+      {state.attempt ? (
+        <>
+          <SectionCard title={`Question ${state.currentIndex + 1} of ${totalQuestions}`} subtitle={currentQuestion?.concept_name || "Question"}>
+            <Text style={styles.progressText}>{answeredCount} answered so far</Text>
+            <Text style={styles.questionTitle}>{currentQuestion?.prompt}</Text>
 
-      {state.submitResult ? (
-        <SectionCard title="Result" subtitle="Your latest performance snapshot is ready.">
-          <View style={styles.resultRow}>
-            <View style={styles.resultTile}>
-              <Text style={styles.resultLabel}>Score</Text>
-              <Text style={styles.resultValue}>{state.submitResult.attempt.score_percent}%</Text>
+            {currentQuestion?.options?.length ? (
+              <View style={styles.optionsWrap}>
+                {currentQuestion.options.map((option) => {
+                  const selected = state.answers[currentQuestion.id]?.selected_option_id === option.id;
+                  return (
+                    <Pressable
+                      key={option.id}
+                      style={[styles.optionRow, selected ? styles.optionRowActive : null]}
+                      onPress={() => updateOption(currentQuestion.id, option.id)}
+                    >
+                      <Text style={[styles.optionText, selected ? styles.optionTextActive : null]}>{option.option_text}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <TextInput
+                style={styles.input}
+                placeholder="Type your answer"
+                value={state.answers[currentQuestion?.id]?.answer_text || ""}
+                onChangeText={(value) => updateText(currentQuestion.id, value)}
+                multiline
+              />
+            )}
+
+            <View style={styles.navRow}>
+              <Pressable
+                style={[styles.secondaryButton, state.currentIndex === 0 ? styles.disabled : null]}
+                disabled={state.currentIndex === 0}
+                onPress={() => setState((current) => ({ ...current, currentIndex: Math.max(current.currentIndex - 1, 0) }))}
+              >
+                <Text style={styles.secondaryButtonText}>Previous</Text>
+              </Pressable>
+              {isLastQuestion ? (
+                <Pressable style={[styles.primaryButton, state.submitting ? styles.disabled : null]} disabled={state.submitting} onPress={submit}>
+                  <Text style={styles.primaryButtonText}>{state.submitting ? "Submitting..." : "Submit"}</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={styles.primaryButton}
+                  onPress={() => setState((current) => ({ ...current, currentIndex: Math.min(current.currentIndex + 1, totalQuestions - 1) }))}
+                >
+                  <Text style={styles.primaryButtonText}>Next</Text>
+                </Pressable>
+              )}
             </View>
-            <View style={styles.resultTile}>
-              <Text style={styles.resultLabel}>Health</Text>
-              <Text style={styles.resultValue}>{state.submitResult.learning_health.health_score}</Text>
-            </View>
-            <View style={styles.resultTile}>
-              <Text style={styles.resultLabel}>Streak</Text>
-              <Text style={styles.resultValue}>{state.submitResult.streak.current_streak_days}d</Text>
-            </View>
-          </View>
-        </SectionCard>
+          </SectionCard>
+
+          {state.result ? (
+            <SectionCard title="Result ready" subtitle="Your report has been generated from this attempt." tone="accent">
+              <View style={styles.resultRow}>
+                <View style={styles.resultTile}>
+                  <Text style={styles.resultLabel}>Score</Text>
+                  <Text style={styles.resultValue}>{state.result.attempt.score_percent}%</Text>
+                </View>
+                <View style={styles.resultTile}>
+                  <Text style={styles.resultLabel}>Health</Text>
+                  <Text style={styles.resultValue}>{state.result.learning_health.health_score}</Text>
+                </View>
+              </View>
+              <View style={styles.navRow}>
+                <Pressable style={styles.secondaryButton} onPress={() => router.push("/(student)/report")}>
+                  <Text style={styles.secondaryButtonText}>Open report</Text>
+                </Pressable>
+                <Pressable style={styles.primaryButton} onPress={() => router.push("/(student)/learn")}>
+                  <Text style={styles.primaryButtonText}>Open learn</Text>
+                </Pressable>
+              </View>
+            </SectionCard>
+          ) : null}
+        </>
       ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  choiceWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
+  pickerGroup: {
+    gap: 8,
   },
-  choiceChip: {
+  label: {
+    color: colors.inkSoft,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  pickerWrap: {
+    minHeight: 54,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
     ...shadows.card,
   },
-  choiceChipActive: {
-    backgroundColor: colors.accentSoft,
-    borderColor: "rgba(251, 100, 4, 0.28)",
-  },
-  choiceText: {
+  picker: {
     color: colors.ink,
-    fontWeight: "700",
   },
-  choiceTextActive: {
-    color: colors.accentStrong,
-  },
-  subjectList: {
-    gap: spacing.sm,
-  },
-  subjectRow: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    ...shadows.card,
-  },
-  subjectRowActive: {
-    backgroundColor: colors.accentSoft,
-    borderColor: "rgba(251, 100, 4, 0.28)",
-  },
-  subjectName: {
-    color: colors.ink,
-    fontWeight: "700",
-  },
-  meta: {
-    color: colors.slate,
-    marginTop: 4,
-  },
-  button: {
+  primaryButton: {
+    minHeight: 48,
+    borderRadius: 14,
     backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
     alignItems: "center",
     justifyContent: "center",
     ...shadows.glow,
   },
+  primaryButtonText: {
+    color: "#ffffff",
+    fontWeight: "800",
+  },
   secondaryButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: radii.md,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.card,
     ...shadows.card,
   },
   secondaryButtonText: {
     color: colors.ink,
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  buttonDisabled: {
+  disabled: {
     opacity: 0.55,
   },
-  buttonText: {
-    color: "#fff",
+  progressText: {
+    color: colors.slate,
+    fontSize: 12,
     fontWeight: "700",
   },
   questionTitle: {
     color: colors.ink,
-    fontWeight: "800",
-    fontSize: 17,
-    lineHeight: 24,
+    fontSize: 18,
+    lineHeight: 25,
+    fontWeight: "900",
   },
   optionsWrap: {
     gap: spacing.sm,
   },
   optionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: "#ffffff",
     ...shadows.card,
   },
   optionRowActive: {
     backgroundColor: colors.accentSoft,
-    borderColor: "rgba(251, 100, 4, 0.28)",
-  },
-  optionDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: colors.slate,
-    backgroundColor: "transparent",
-  },
-  optionDotActive: {
-    borderColor: colors.accentStrong,
-    backgroundColor: colors.accentStrong,
+    borderColor: "rgba(251, 100, 4, 0.26)",
   },
   optionText: {
     color: colors.ink,
-    flex: 1,
+    fontSize: 14,
   },
   optionTextActive: {
     color: colors.accentStrong,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   input: {
-    backgroundColor: colors.surface,
+    minHeight: 120,
+    textAlignVertical: "top",
+    padding: spacing.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
+    backgroundColor: "#ffffff",
     color: colors.ink,
   },
   navRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     gap: spacing.sm,
   },
   resultRow: {
@@ -498,26 +419,27 @@ const styles = StyleSheet.create({
   },
   resultTile: {
     flex: 1,
-    borderRadius: radii.md,
-    backgroundColor: colors.accentSoft,
     padding: spacing.md,
+    borderRadius: radii.lg,
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "rgba(251, 100, 4, 0.18)",
+    borderColor: colors.line,
     ...shadows.card,
   },
   resultLabel: {
     color: colors.slate,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.8,
   },
   resultValue: {
     color: colors.ink,
-    fontWeight: "800",
-    fontSize: 22,
-    marginTop: 6,
+    fontSize: 24,
+    fontWeight: "900",
+    marginTop: 8,
   },
   error: {
     color: colors.danger,
+    fontSize: 13,
   },
 });

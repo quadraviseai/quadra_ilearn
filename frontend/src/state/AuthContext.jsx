@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { apiRequest } from "../lib/api.js";
 import { AUTH_SESSION_EVENT, readStoredSession, writeStoredSession } from "../lib/authStorage.js";
@@ -7,6 +7,12 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => readStoredSession());
   const [hydrating, setHydrating] = useState(() => Boolean(readStoredSession()?.access));
+
+  const refreshCurrentUser = useCallback(async () => {
+    const user = await apiRequest("/api/auth/me");
+    setSession((current) => (current ? { ...current, user } : current));
+    return user;
+  }, []);
 
   useEffect(() => {
     writeStoredSession(session);
@@ -103,6 +109,7 @@ export function AuthProvider({ children }) {
         login,
         authenticateWithGoogle,
         logout,
+        refreshCurrentUser,
         isAuthenticated: Boolean(session?.access),
         authReady: !hydrating,
       }}

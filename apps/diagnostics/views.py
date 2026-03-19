@@ -32,6 +32,8 @@ from apps.diagnostics.services import (
     unlock_paid_attempt,
     WeakTopicAIReviewError,
 )
+from apps.users.models import TokenTransaction
+from apps.users.services import TokenError, get_token_settings, serialize_token_settings, spend_tokens
 
 
 class ExamListView(APIView):
@@ -136,7 +138,14 @@ class DiagnosticAttemptDetailView(APIView):
             ).data
             serialized["display_order"] = item.display_order
             questions.append(serialized)
-        return Response({"attempt": TestAttemptSerializer(attempt).data, "questions": questions})
+        return Response(
+            {
+                "attempt": TestAttemptSerializer(attempt).data,
+                "questions": questions,
+                "token_balance": request.user.token_balance,
+                "token_settings": serialize_token_settings(get_token_settings()),
+            }
+        )
 
 
 class AttemptAnswerSaveView(APIView):
@@ -243,11 +252,20 @@ class ReportLearningView(APIView):
                     "guidance": guidance,
                 }
             )
+        unlocked_concept_ids = list(
+            request.user.token_transactions.filter(
+                transaction_type=TokenTransaction.TransactionType.WEAK_TOPIC_UNLOCK,
+                metadata__attempt_id=str(report.id),
+            ).values_list("metadata__concept_id", flat=True)
+        )
         return Response(
             {
                 "learning_cards": content,
                 "improvement_loop": build_improvement_loop(report),
                 "mistake_analysis": build_mistake_analysis(report),
+                "token_balance": request.user.token_balance,
+                "token_settings": serialize_token_settings(get_token_settings()),
+                "unlocked_concept_ids": unlocked_concept_ids,
             }
         )
 
@@ -262,11 +280,71 @@ class ReportLearningAIView(APIView):
             student=request.user.student_profile,
             status=TestAttempt.Status.EVALUATED,
         )
+        settings = get_token_settings()
+        already_unlocked = request.user.token_transactions.filter(
+            transaction_type=TokenTransaction.TransactionType.WEAK_TOPIC_UNLOCK,
+            metadata__attempt_id=str(report.id),
+            metadata__concept_id=str(concept_id),
+        ).exists()
+        if not already_unlocked and request.user.token_balance < settings.weak_topic_unlock_cost:
+            raise ValidationError({"detail": "Insufficient tokens."})
         try:
             content = generate_weak_topic_ai_review(report, concept_id)
         except WeakTopicAIReviewError as exc:
             raise APIException(str(exc)) from exc
-        return Response(content)
+        if not already_unlocked:
+            try:
+                request.user = spend_tokens(
+                    request.user,
+                    settings.weak_topic_unlock_cost,
+                    TokenTransaction.TransactionType.WEAK_TOPIC_UNLOCK,
+                    note=f"Weak topic unlock for {report.subject.name}",
+                    metadata={"attempt_id": str(report.id), "concept_id": str(concept_id)},
+                )
+            except TokenError as exc:
+                raise ValidationError({"detail": str(exc)}) from exc
+        return Response(
+            {
+                **content,
+                "token_balance": request.user.token_balance,
+                "tokens_spent": 0 if already_unlocked else settings.weak_topic_unlock_cost,
+                "already_unlocked": already_unlocked,
+            }
+        )
+
+
+class DiagnosticAttemptTimerResetView(APIView):
+    permission_classes = [IsStudent]
+
+    def post(self, request, attempt_id):
+        attempt = get_object_or_404(
+            TestAttempt.objects.select_related("exam", "subject", "student"),
+            id=attempt_id,
+            student=request.user.student_profile,
+            status=TestAttempt.Status.STARTED,
+        )
+        settings = get_token_settings()
+        try:
+            request.user = spend_tokens(
+                request.user,
+                settings.timer_reset_cost,
+                TokenTransaction.TransactionType.TIMER_RESET,
+                note=f"Timer reset for {attempt.exam.name} {attempt.subject.name}",
+                metadata={"attempt_id": str(attempt.id)},
+            )
+        except TokenError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+
+        question_count = TestAttemptQuestion.objects.filter(attempt=attempt).count()
+        return Response(
+            {
+                "message": "Timer reset unlocked.",
+                "token_balance": request.user.token_balance,
+                "tokens_spent": settings.timer_reset_cost,
+                "reset_duration_seconds": max(question_count, 1) * 60,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class PaymentUnlockView(APIView):

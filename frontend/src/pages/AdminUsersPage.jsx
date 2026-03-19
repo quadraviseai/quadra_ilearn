@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from "antd";
+import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from "antd";
 
 import { apiRequest } from "../lib/api.js";
 import { useAuth } from "../state/AuthContext.jsx";
@@ -72,6 +72,8 @@ function AdminUsersPage() {
       board: user.board,
       school_name: user.school_name,
       relationship_to_student: user.relationship_to_student,
+      token_adjustment: 0,
+      token_adjustment_note: "",
     });
   };
 
@@ -93,6 +95,11 @@ function AdminUsersPage() {
 
       if (editingUser.role === "guardian") {
         payload.relationship_to_student = values.relationship_to_student ?? "";
+      }
+
+      if (values.token_adjustment) {
+        payload.token_adjustment = values.token_adjustment;
+        payload.token_adjustment_note = values.token_adjustment_note ?? "";
       }
 
       setSaving(true);
@@ -146,6 +153,11 @@ function AdminUsersPage() {
       dataIndex: "role",
       key: "role",
       render: (value) => <Tag>{value}</Tag>,
+    },
+    {
+      title: "Tokens",
+      dataIndex: "token_balance",
+      key: "token_balance",
     },
     {
       title: "Status",
@@ -256,6 +268,18 @@ function AdminUsersPage() {
           </Form.Item>
           <Form.Item name="phone" label="Phone">
             <Input />
+          </Form.Item>
+          <Form.Item name="token_adjustment" label={`Token adjustment${editingUser ? ` (current: ${editingUser.token_balance})` : ""}`}>
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="token_adjustment_note" label="Token adjustment note">
+            <Input />
+          </Form.Item>
+          <Form.Item label="Referral code">
+            <Input value={editingUser?.referral_code} disabled />
+          </Form.Item>
+          <Form.Item label="Referred by">
+            <Input value={editingUser?.referred_by_email || ""} disabled />
           </Form.Item>
           <Form.Item name="class_name" label="Class">
             <Input disabled={editingUser?.role !== "student"} />

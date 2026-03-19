@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.students.models import StudentProfile
+from apps.users.models import TokenTransaction
 
 
 @override_settings(
@@ -36,6 +37,8 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = get_user_model().objects.get(email="student@example.com")
         self.assertEqual(user.role, "student")
+        self.assertEqual(user.token_balance, 1000)
+        self.assertTrue(user.referral_code)
         profile = StudentProfile.objects.get(user=user, full_name="Student One")
         self.assertEqual(str(profile.date_of_birth), "2011-04-15")
         self.assertEqual(profile.primary_target_exam, "JEE")
@@ -57,6 +60,7 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["token_balance"], 1000)
 
     @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
     @patch("apps.users.serializers.verify_google_id_token")
@@ -249,3 +253,37 @@ class AuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["email"], user.email)
+        self.assertIn("referral_code", response.data)
+        self.assertIn("token_settings", response.data)
+
+    def test_register_with_referral_code_rewards_referrer(self):
+        referrer = get_user_model().objects.create_user(
+            email="referrer@example.com",
+            password="password123",
+            role="student",
+        )
+        StudentProfile.objects.create(user=referrer, full_name="Referrer", class_name="")
+
+        response = self.client.post(
+            "/api/auth/register",
+            {
+                "name": "Student Two",
+                "email": "student-two@example.com",
+                "password": "password123",
+                "role": "student",
+                "referral_code": referrer.referral_code,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        referrer.refresh_from_db()
+        referred_user = get_user_model().objects.get(email="student-two@example.com")
+        self.assertEqual(referrer.token_balance, 200)
+        self.assertEqual(referred_user.referred_by_id, referrer.id)
+        self.assertTrue(
+            TokenTransaction.objects.filter(
+                user=referrer,
+                transaction_type=TokenTransaction.TransactionType.REFERRAL_BONUS,
+            ).exists()
+        )

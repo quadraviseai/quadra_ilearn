@@ -81,6 +81,13 @@ export async function fetchAttemptDetail(attemptId) {
   return apiRequest(`/api/diagnostic/attempts/${attemptId}`);
 }
 
+export async function resetAttemptTimer(attemptId) {
+  return apiRequest(`/api/diagnostic/attempts/${attemptId}/reset-timer`, {
+    method: "POST",
+    body: {},
+  });
+}
+
 export async function saveAnswer(attemptId, payload) {
   return apiRequest(`/api/diagnostic/attempts/${attemptId}/answers`, {
     method: "PATCH",

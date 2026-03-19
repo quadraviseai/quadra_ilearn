@@ -85,7 +85,7 @@ function StudentReportPage() {
               className="button button-primary"
               onClick={() => {
                 setSelectedFlow(report.exam, report.subject);
-                navigate("/student/start");
+                navigate("/student");
               }}
             >
               Retest

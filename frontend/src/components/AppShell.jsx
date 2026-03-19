@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { UserOutlined, WalletOutlined } from "@ant-design/icons";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import quadraviseLogo from "../assets/quadravise_logo.png";
@@ -7,7 +8,6 @@ import { useAuth } from "../state/AuthContext.jsx";
 const studentLinks = [
   { to: "/student", label: "Exams" },
   { to: "/student/report", label: "Report" },
-  { to: "/student/payment", label: "Payment" },
 ];
 
 const guardianLinks = [
@@ -18,6 +18,7 @@ const guardianLinks = [
 
 const adminLinks = [
   { to: "/admin-portal", label: "Overview" },
+  { to: "/admin-portal/token-rules", label: "Token Rules" },
   { to: "/admin-portal/users", label: "Users" },
   { to: "/admin-portal/content", label: "Content" },
 ];
@@ -46,6 +47,10 @@ function AppShell() {
     navigate("/");
   };
 
+  const handleProfile = () => {
+    navigate("/student/profile");
+  };
+
   return (
     <div className="page dashboard-page student-app-shell">
       <div className="workspace-shell workspace-shell-header">
@@ -71,13 +76,28 @@ function AppShell() {
             ))}
           </nav>
           <div className="workspace-header-actions">
-            <button className="button button-primary workspace-logout" onClick={handleLogout}>
-              {user?.role === "admin"
-                ? "Admin Logout"
-                : user?.role === "guardian"
-                  ? "Guardian Logout"
-                  : "Student Logout"}
-            </button>
+            {user?.role === "student" ? (
+              <>
+                <div className="workspace-token-pill" aria-label={`${user?.token_balance ?? 0} tokens available`}>
+                  <span className="workspace-token-pill-icon" aria-hidden="true">
+                    <WalletOutlined />
+                  </span>
+                  <div className="workspace-token-pill-copy">
+                    <strong>{user?.token_balance ?? 0}</strong>
+                  </div>
+                </div>
+                <button className="button workspace-profile-button" onClick={handleProfile}>
+                  <span className="workspace-profile-button-icon" aria-hidden="true">
+                    <UserOutlined />
+                  </span>
+                  Profile
+                </button>
+              </>
+            ) : (
+              <button className="button button-primary workspace-logout" onClick={handleLogout}>
+                {user?.role === "admin" ? "Admin Logout" : "Guardian Logout"}
+              </button>
+            )}
           </div>
         </header>
         <main className="workspace-main">

@@ -9,7 +9,7 @@ import {
   unlockRetest,
 } from "../lib/studentFlowApi.js";
 
-function StudentPaymentPage() {
+export function StudentPaymentSection({ embedded = false }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
@@ -22,7 +22,11 @@ function StudentPaymentPage() {
 
     const load = async () => {
       if (!selection.examId) {
-        navigate("/student", { replace: true });
+        if (!embedded) {
+          navigate("/student", { replace: true });
+        } else {
+          setLoading(false);
+        }
         return;
       }
 
@@ -64,6 +68,17 @@ function StudentPaymentPage() {
     return <Spin size="large" />;
   }
 
+  if (embedded && !selection.examId) {
+    return (
+      <div className="student-flow-detail-grid">
+        <article className="panel student-flow-card student-flow-card-compact">
+          <h2>Payment</h2>
+          <p>Select an exam and subject from the student flow first to view the retest payment summary here.</p>
+        </article>
+      </div>
+    );
+  }
+
   if (!selectedExam || !selectedSubject) {
     return null;
   }
@@ -73,7 +88,7 @@ function StudentPaymentPage() {
     try {
       await unlockRetest(selectedExam.id, selectedSubject.id);
       message.success(`Payment received. Retest unlocked for ${selectedSubject.name}.`);
-      navigate("/student/start");
+      navigate("/student");
     } catch (error) {
       message.error(error.message);
     } finally {
@@ -83,13 +98,15 @@ function StudentPaymentPage() {
 
   return (
     <div className="student-flow-page">
-      <section className="student-flow-hero panel">
-        <div>
-          <span className="eyebrow">Module 6</span>
-          <h1>Unlock the next test</h1>
-          <p>Use the backend payment-unlock endpoint to add one retest credit for this subject.</p>
-        </div>
-      </section>
+      {!embedded ? (
+        <section className="student-flow-hero panel">
+          <div>
+            <span className="eyebrow">Module 6</span>
+            <h1>Unlock the next test</h1>
+            <p>Use the backend payment-unlock endpoint to add one retest credit for this subject.</p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="student-flow-detail-grid">
         <article className="panel student-flow-card student-flow-card-compact">
@@ -123,6 +140,10 @@ function StudentPaymentPage() {
       </section>
     </div>
   );
+}
+
+function StudentPaymentPage() {
+  return <StudentPaymentSection />;
 }
 
 export default StudentPaymentPage;

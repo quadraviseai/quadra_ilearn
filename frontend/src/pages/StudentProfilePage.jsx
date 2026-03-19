@@ -1,10 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Card, DatePicker, Input, Row, Col, Typography } from "antd";
-import { BulbOutlined } from "@ant-design/icons";
+import {
+  BulbOutlined,
+  CameraOutlined,
+  IdcardOutlined,
+  MailOutlined,
+  PhoneOutlined,
+  ShareAltOutlined,
+  TrophyOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import FormMessage from "../components/FormMessage.jsx";
 import { apiRequest } from "../lib/api.js";
+import { StudentPaymentSection } from "./StudentPaymentPage.jsx";
 import { useAuth } from "../state/AuthContext.jsx";
 
 const emptyProfile = {
@@ -15,8 +25,13 @@ const emptyProfile = {
   date_of_birth: "",
   board: "",
   school_name: "",
+  profile_image_url: "",
   primary_target_exam: "",
   secondary_target_exam: "",
+  token_balance: 0,
+  referral_code: "",
+  referred_by_email: "",
+  referral_code_input: "",
 };
 
 function formatSuggestionState(data) {
@@ -38,8 +53,11 @@ function formatSuggestionState(data) {
 }
 
 function StudentProfilePage() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const [form, setForm] = useState(emptyProfile);
+  const [profileImageFile, setProfileImageFile] = useState(null);
+  const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState("");
+  const profileImageInputRef = useRef(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [state, setState] = useState({ loading: true, saving: false, error: "", success: "" });
   const [examSuggestion, setExamSuggestion] = useState({
@@ -47,6 +65,18 @@ function StudentProfilePage() {
     error: "",
     data: null,
   });
+  const profileImagePreview = profileImagePreviewUrl || form.profile_image_url;
+  const referralShareText = `Use my QuadraILearn referral code: ${form.referral_code}`;
+
+  useEffect(() => {
+    if (!profileImageFile) {
+      setProfileImagePreviewUrl("");
+      return undefined;
+    }
+    const objectUrl = URL.createObjectURL(profileImageFile);
+    setProfileImagePreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [profileImageFile]);
 
   useEffect(() => {
     let isMounted = true;
@@ -66,8 +96,13 @@ function StudentProfilePage() {
           date_of_birth: data.date_of_birth || "",
           board: data.board || "",
           school_name: data.school_name || "",
+          profile_image_url: data.profile_image_url || "",
           primary_target_exam: data.primary_target_exam || "",
           secondary_target_exam: data.secondary_target_exam || "",
+          token_balance: data.token_balance || 0,
+          referral_code: data.referral_code || "",
+          referred_by_email: data.referred_by_email || "",
+          referral_code_input: "",
         });
         setExamSuggestion({
           loading: false,
@@ -168,16 +203,21 @@ function StudentProfilePage() {
     }
     setState((current) => ({ ...current, saving: true, error: "", success: "" }));
     try {
-      const payload = {
-        phone: form.phone,
-        full_name: form.full_name,
-        class_name: form.class_name,
-        date_of_birth: form.date_of_birth || null,
-        board: form.board,
-        school_name: form.school_name,
-        primary_target_exam: form.primary_target_exam,
-        secondary_target_exam: form.secondary_target_exam,
-      };
+      const payload = new FormData();
+      payload.append("phone", form.phone);
+      payload.append("full_name", form.full_name);
+      payload.append("class_name", form.class_name);
+      payload.append("board", form.board);
+      payload.append("school_name", form.school_name);
+      payload.append("primary_target_exam", form.primary_target_exam);
+      payload.append("secondary_target_exam", form.secondary_target_exam);
+      payload.append("referral_code_input", form.referral_code_input);
+      if (form.date_of_birth) {
+        payload.append("date_of_birth", form.date_of_birth);
+      }
+      if (profileImageFile) {
+        payload.append("profile_image_upload", profileImageFile);
+      }
       const data = await apiRequest("/api/students/profile", {
         method: "PATCH",
         token,
@@ -188,28 +228,61 @@ function StudentProfilePage() {
         ...data,
         phone: data.phone || "",
         date_of_birth: data.date_of_birth || "",
+        profile_image_url: data.profile_image_url || "",
+        token_balance: data.token_balance || current.token_balance || 0,
+        referral_code: data.referral_code || current.referral_code || "",
+        referred_by_email: data.referred_by_email || current.referred_by_email || "",
+        referral_code_input: "",
       }));
+      setProfileImageFile(null);
       setState((current) => ({ ...current, saving: false, success: "Profile updated successfully." }));
     } catch (error) {
       setState((current) => ({ ...current, saving: false, error: error.message }));
     }
   };
 
+  const handleProfileImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setProfileImageFile(file);
+  };
+
+  const openProfileImagePicker = () => {
+    profileImageInputRef.current?.click();
+  };
+
+  const handleCopyReferralCode = async () => {
+    if (!form.referral_code) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(form.referral_code);
+      setState((current) => ({ ...current, success: "Referral code copied." }));
+    } catch {
+      setState((current) => ({ ...current, error: "Could not copy the referral code." }));
+    }
+  };
+
+  const handleShareReferralCode = async () => {
+    if (!form.referral_code) {
+      return;
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "QuadraILearn referral code",
+          text: referralShareText,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(referralShareText);
+      setState((current) => ({ ...current, success: "Referral message copied for sharing." }));
+    } catch {
+      setState((current) => ({ ...current, error: "Could not share the referral code." }));
+    }
+  };
+
   return (
     <section className="student-profile-page">
-      <Card className="student-dashboard-welcome student-antd-card" variant="borderless">
-        <div className="student-dashboard-welcome-row">
-          <div>
-            <Typography.Title level={3} className="student-dashboard-title">
-              Your profile
-            </Typography.Title>
-            <Typography.Paragraph className="student-dashboard-subtitle">
-              Keep your personal and academic details up to date so diagnostics and study planning stay relevant.
-            </Typography.Paragraph>
-          </div>
-        </div>
-      </Card>
-
       <FormMessage>{state.error}</FormMessage>
       {state.success ? <div className="message message-success">{state.success}</div> : null}
 
@@ -219,160 +292,156 @@ function StudentProfilePage() {
         ) : (
           <form className="student-profile-form" onSubmit={handleSubmit}>
             <Row gutter={[16, 16]}>
-              <Col xs={24} md={12}>
-                <label className="student-profile-label">Email</label>
-                <Input value={form.email} size="large" disabled />
-              </Col>
-              <Col xs={24} md={12}>
-                <label className="student-profile-label">Phone</label>
-                <Input
-                  value={form.phone}
-                  size="large"
-                  maxLength={10}
-                  status={fieldErrors.phone ? "error" : ""}
-                  onChange={(event) => updatePhone(event.target.value)}
-                />
-                {fieldErrors.phone ? <div className="message message-error">{fieldErrors.phone}</div> : null}
-              </Col>
-              <Col xs={24} md={12}>
-                <label className="student-profile-label">Full name</label>
-                <Input
-                  value={form.full_name}
-                  size="large"
-                  onChange={(event) => updateField("full_name", event.target.value)}
-                />
-              </Col>
-              <Col xs={24} md={12}>
-                <label className="student-profile-label">Class</label>
-                <Input
-                  value={form.class_name}
-                  size="large"
-                  status={fieldErrors.class_name ? "error" : ""}
-                  onChange={(event) => updateClassName(event.target.value)}
-                />
-                {fieldErrors.class_name ? <div className="message message-error">{fieldErrors.class_name}</div> : null}
-              </Col>
-              <Col xs={24} md={12}>
-                <label className="student-profile-label">Date of birth</label>
-                <DatePicker
-                  size="large"
-                  format="MM/DD/YYYY"
-                  value={form.date_of_birth ? dayjs(form.date_of_birth) : null}
-                  onChange={(value) => updateField("date_of_birth", value ? value.format("YYYY-MM-DD") : "")}
-                  style={{ width: "100%" }}
-                />
-              </Col>
-              <Col xs={24} md={12}>
-                <label className="student-profile-label">Board</label>
-                <Input
-                  value={form.board}
-                  size="large"
-                  onChange={(event) => updateBoard(event.target.value)}
-                />
-              </Col>
               <Col xs={24}>
-                <label className="student-profile-label">School name</label>
-                <Input
-                  value={form.school_name}
-                  size="large"
-                  onChange={(event) => updateField("school_name", event.target.value)}
-                />
+                <div className="student-profile-image-panel">
+                  <div className="student-profile-image-copy">
+                    <div className="student-profile-section-head">
+                      <span className="student-profile-section-icon"><UserOutlined /></span>
+                      <div>
+                        <Typography.Title level={4}>Profile image</Typography.Title>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="student-profile-image-settings">
+                    <label className="student-profile-label">Upload profile image</label>
+                    <div className="student-profile-image-actions">
+                      <Button type="primary" onClick={openProfileImagePicker}>
+                        {profileImagePreview ? "Choose another image" : "Choose image"}
+                      </Button>
+                      <span className="student-profile-image-file-name">
+                        {profileImageFile?.name || "No file selected yet"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </Col>
               <Col xs={24}>
                 <div className="student-profile-exam-panel">
-                  <div className="student-profile-exam-panel-head">
+                  <div className="student-profile-section-head">
+                    <span className="student-profile-section-icon"><IdcardOutlined /></span>
                     <div>
-                      <Typography.Title level={4}>Exam planning</Typography.Title>
+                      <Typography.Title level={4}>Account details</Typography.Title>
                       <Typography.Paragraph>
-                        Set the main exam goal first, then add a backup option if needed.
+                        Basic account and academic information used across diagnostics and study recommendations.
                       </Typography.Paragraph>
                     </div>
                   </div>
-
-                  <div className="student-profile-exam-grid">
-                    <div className="student-profile-exam-main">
-                      <label className="student-profile-label">Primary target exam</label>
+                  <Row gutter={[16, 16]}>
+                    <Col xs={24} md={12}>
+                      <label className="student-profile-label">Email</label>
+                      <Input value={form.email} size="large" disabled prefix={<MailOutlined />} />
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <label className="student-profile-label">Phone</label>
                       <Input
-                        value={form.primary_target_exam}
+                        value={form.phone}
                         size="large"
-                        placeholder="Enter your main target exam"
-                        onChange={(event) => updateField("primary_target_exam", event.target.value)}
+                        maxLength={10}
+                        prefix={<PhoneOutlined />}
+                        status={fieldErrors.phone ? "error" : ""}
+                        onChange={(event) => updatePhone(event.target.value)}
                       />
-                      <label className="student-profile-label student-profile-secondary-label">Secondary target exam</label>
+                      {fieldErrors.phone ? <div className="message message-error">{fieldErrors.phone}</div> : null}
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <label className="student-profile-label">Full name</label>
                       <Input
-                        value={form.secondary_target_exam}
+                        value={form.full_name}
                         size="large"
-                        placeholder="Optional backup exam"
-                        onChange={(event) => updateField("secondary_target_exam", event.target.value)}
+                        prefix={<UserOutlined />}
+                        onChange={(event) => updateField("full_name", event.target.value)}
                       />
-                    </div>
-
-                    <div className="student-profile-exam-ai">
-                      <div className="student-profile-suggestion">
-                        <div className="student-profile-suggestion-copy">
-                          <BulbOutlined />
-                          {examSuggestion.data?.suggestions?.length ? (
-                            <>
-                              <span>AI suggested exams based on the current profile.</span>
-                              <small>
-                                Review the ranked options below and apply the one that fits the student best.
-                                {examSuggestion.data.generatedAt ? ` Saved from the last AI run.` : ""}
-                              </small>
-                            </>
-                          ) : (
-                            <>
-                              <span>Get an AI-suggested exam from the student's class and age.</span>
-                              <small>
-                                Add class and date of birth for better suggestions. Board and school improve context.
-                              </small>
-                            </>
-                          )}
-                        </div>
-                        <div className="student-profile-suggestion-actions">
-                          <Button
-                            className="student-profile-suggestion-action"
-                            type="link"
-                            loading={examSuggestion.loading}
-                            onClick={handleFetchPrimaryExamSuggestion}
-                          >
-                            {examSuggestion.data?.suggestions?.length ? "Refresh suggestion" : "Ask AI"}
-                          </Button>
-                        </div>
-                      </div>
-                      {examSuggestion.error ? <FormMessage>{examSuggestion.error}</FormMessage> : null}
-                      {examSuggestion.data?.suggestions?.length ? (
-                        <div className="student-profile-suggestion-list">
-                          {examSuggestion.data.suggestions.map((suggestion, index) => (
-                            <div className="student-profile-suggestion-item" key={`${suggestion.suggested_exam}-${index}`}>
-                              <div className="student-profile-suggestion-item-copy">
-                                <strong>{suggestion.suggested_exam}</strong>
-                                <span>{suggestion.reason}</span>
-                              </div>
-                              <div className="student-profile-suggestion-item-actions">
-                                <span className={`student-profile-confidence student-profile-confidence-${suggestion.confidence}`}>
-                                  {suggestion.confidence}
-                                </span>
-                                <Button
-                                  className="student-profile-suggestion-action"
-                                  type="default"
-                                  onClick={() => applySuggestion("primary_target_exam", suggestion.suggested_exam)}
-                                >
-                                  Set as primary
-                                </Button>
-                                <Button
-                                  className="student-profile-suggestion-action"
-                                  type="default"
-                                  onClick={() => applySuggestion("secondary_target_exam", suggestion.suggested_exam)}
-                                >
-                                  Set as secondary
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <label className="student-profile-label">Class</label>
+                      <Input
+                        value={form.class_name}
+                        size="large"
+                        prefix={<IdcardOutlined />}
+                        status={fieldErrors.class_name ? "error" : ""}
+                        onChange={(event) => updateClassName(event.target.value)}
+                      />
+                      {fieldErrors.class_name ? <div className="message message-error">{fieldErrors.class_name}</div> : null}
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <label className="student-profile-label">Date of birth</label>
+                      <DatePicker
+                        size="large"
+                        format="MM/DD/YYYY"
+                        value={form.date_of_birth ? dayjs(form.date_of_birth) : null}
+                        onChange={(value) => updateField("date_of_birth", value ? value.format("YYYY-MM-DD") : "")}
+                        style={{ width: "100%" }}
+                      />
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <label className="student-profile-label">Board</label>
+                      <Input
+                        value={form.board}
+                        size="large"
+                        prefix={<TrophyOutlined />}
+                        onChange={(event) => updateBoard(event.target.value)}
+                      />
+                    </Col>
+                    <Col xs={24}>
+                      <label className="student-profile-label">School name</label>
+                      <Input
+                        value={form.school_name}
+                        size="large"
+                        onChange={(event) => updateField("school_name", event.target.value)}
+                      />
+                    </Col>
+                  </Row>
+                </div>
+              </Col>
+              <Col xs={24}>
+                <div className="student-profile-exam-panel student-profile-referral-banner">
+                  <div className="student-profile-section-head">
+                    <span className="student-profile-section-icon"><ShareAltOutlined /></span>
+                    <div>
+                      <Typography.Title level={4}>Referral</Typography.Title>
+                      <Typography.Paragraph>
+                        Share your referral code to earn token rewards, or apply a referral code once if someone invited you.
+                      </Typography.Paragraph>
                     </div>
                   </div>
+                  <Row gutter={[16, 16]} className="student-profile-referral-grid">
+                    <Col xs={24} md={12}>
+                      <div className="student-profile-referral-card">
+                        <label className="student-profile-label">Your referral code</label>
+                        <div className="student-profile-referral-share">
+                          <div className="student-profile-referral-inline">
+                            <Input value={form.referral_code} size="large" disabled />
+                            <div className="student-profile-referral-actions">
+                              <Button onClick={handleCopyReferralCode} disabled={!form.referral_code}>
+                                Copy
+                              </Button>
+                              <Button type="primary" onClick={handleShareReferralCode} disabled={!form.referral_code}>
+                                Share
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <div className="student-profile-referral-card">
+                        <label className="student-profile-label">Referred by</label>
+                        <Input value={form.referred_by_email || "Not applied"} size="large" disabled />
+                      </div>
+                    </Col>
+                    <Col xs={24}>
+                      <div className="student-profile-referral-card student-profile-referral-card-wide">
+                        <label className="student-profile-label">Apply referral code</label>
+                        <Input
+                          value={form.referral_code_input}
+                          size="large"
+                          placeholder={form.referred_by_email ? "Referral already applied" : "Enter referral code"}
+                          disabled={Boolean(form.referred_by_email)}
+                          onChange={(event) => updateField("referral_code_input", event.target.value.toUpperCase())}
+                        />
+                      </div>
+                    </Col>
+                  </Row>
                 </div>
               </Col>
             </Row>
@@ -388,6 +457,21 @@ function StudentProfilePage() {
             </div>
           </form>
         )}
+      </Card>
+
+      <Card className="student-dashboard-focus student-antd-card" variant="borderless">
+        <div className="student-profile-exam-panel">
+          <div className="student-profile-section-head">
+            <span className="student-profile-section-icon"><BulbOutlined /></span>
+            <div>
+              <Typography.Title level={4}>Payment</Typography.Title>
+              <Typography.Paragraph>
+                Review the selected exam payment summary and unlock a retest from the profile page.
+              </Typography.Paragraph>
+            </div>
+          </div>
+          <StudentPaymentSection embedded />
+        </div>
       </Card>
     </section>
   );

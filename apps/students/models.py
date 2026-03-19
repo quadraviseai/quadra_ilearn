@@ -16,6 +16,8 @@ class StudentProfile(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     board = models.CharField(max_length=50, blank=True)
     school_name = models.CharField(max_length=150, blank=True)
+    profile_image = models.FileField(upload_to="profile-images/", blank=True)
+    profile_image_url = models.URLField(blank=True)
     primary_target_exam = models.CharField(max_length=100, blank=True)
     secondary_target_exam = models.CharField(max_length=100, blank=True)
     ai_exam_suggestions = models.JSONField(default=list, blank=True)

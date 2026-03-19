@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 let googleScriptPromise = null;
+let initializedClientId = null;
+let credentialHandler = null;
 
 function loadGoogleScript() {
   if (typeof window === "undefined") {
@@ -37,6 +39,10 @@ function GoogleAuthButton({ buttonText, onCredential, disabled = false, onUnavai
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
   useEffect(() => {
+    credentialHandler = onCredential;
+  }, [onCredential]);
+
+  useEffect(() => {
     if (!clientId || !containerRef.current) {
       if (!clientId) {
         setLoadError("Google sign-in is not configured.");
@@ -55,14 +61,17 @@ function GoogleAuthButton({ buttonText, onCredential, disabled = false, onUnavai
         }
 
         containerRef.current.innerHTML = "";
-        google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response) => {
-            if (response?.credential) {
-              onCredential(response.credential);
-            }
-          },
-        });
+        if (initializedClientId !== clientId) {
+          google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response) => {
+              if (response?.credential) {
+                credentialHandler?.(response.credential);
+              }
+            },
+          });
+          initializedClientId = clientId;
+        }
         google.accounts.id.renderButton(containerRef.current, {
           theme: "outline",
           size: "large",

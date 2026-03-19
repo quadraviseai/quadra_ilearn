@@ -14,6 +14,7 @@ from apps.diagnostics.models import (
     TestEntitlement,
 )
 from apps.students.models import StudentProfile
+from apps.users.models import TokenTransaction
 
 
 class MockTestFlowTests(APITestCase):
@@ -263,6 +264,36 @@ class MockTestFlowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["heading"], "AI review")
         self.assertEqual(response.data["shortcut_guide"], "Shortcut")
+        self.student_user.refresh_from_db()
+        self.assertEqual(response.data["tokens_spent"], 25)
+        self.assertEqual(self.student_user.token_balance, 975)
+
+        second_response = self.client.get(f"/api/diagnostic/reports/{attempt_id}/learning/{concept_id}/ai")
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(second_response.data["already_unlocked"])
+        self.student_user.refresh_from_db()
+        self.assertEqual(self.student_user.token_balance, 975)
+
+    def test_timer_reset_spends_tokens(self):
+        start = self.client.post(
+            "/api/diagnostic/attempts/start",
+            {"exam_id": str(self.exam.id), "subject_id": str(self.subject.id)},
+            format="json",
+        )
+        self.assertEqual(start.status_code, status.HTTP_201_CREATED)
+
+        response = self.client.post(f"/api/diagnostic/attempts/{start.data['id']}/reset-timer", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["tokens_spent"], 50)
+        self.assertEqual(response.data["reset_duration_seconds"], 1800)
+        self.student_user.refresh_from_db()
+        self.assertEqual(self.student_user.token_balance, 950)
+        self.assertTrue(
+            TokenTransaction.objects.filter(
+                user=self.student_user,
+                transaction_type=TokenTransaction.TransactionType.TIMER_RESET,
+            ).exists()
+        )
 
 
 class RegistrationCompatibilityTests(APITestCase):

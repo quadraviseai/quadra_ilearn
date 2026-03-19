@@ -1,8 +1,16 @@
 import uuid
+from secrets import choice
 
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
+
+REFERRAL_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_referral_code(length=8):
+    return "".join(choice(REFERRAL_CODE_ALPHABET) for _ in range(length))
 
 
 class UserManager(BaseUserManager):
@@ -12,6 +20,8 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError("The email field is required.")
         email = self.normalize_email(email)
+        if not extra_fields.get("referral_code"):
+            extra_fields["referral_code"] = self.model.generate_unique_referral_code()
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -51,6 +61,10 @@ class User(AbstractUser):
     google_subject = models.CharField(max_length=255, blank=True, null=True, unique=True)
     role = models.CharField(max_length=20, choices=Role.choices)
     is_verified = models.BooleanField(default=False)
+    token_balance = models.PositiveIntegerField(default=0)
+    referral_code = models.CharField(max_length=24, unique=True, blank=True)
+    referred_by = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="referrals")
+    welcome_tokens_granted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -59,5 +73,57 @@ class User(AbstractUser):
 
     objects = UserManager()
 
+    @classmethod
+    def generate_unique_referral_code(cls):
+        while True:
+            candidate = generate_referral_code()
+            if not cls.objects.filter(referral_code=candidate).exists():
+                return candidate
+
     def __str__(self):
         return f"{self.email} ({self.role})"
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            self.referral_code = self.generate_unique_referral_code()
+        super().save(*args, **kwargs)
+
+
+class TokenSettings(models.Model):
+    initial_login_bonus = models.PositiveIntegerField(default=1000)
+    referral_bonus = models.PositiveIntegerField(default=200)
+    weak_topic_unlock_cost = models.PositiveIntegerField(default=25)
+    timer_reset_cost = models.PositiveIntegerField(default=50)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "Token Settings"
+
+
+class TokenTransaction(models.Model):
+    class TransactionType(models.TextChoices):
+        WELCOME_BONUS = "welcome_bonus", "Welcome Bonus"
+        REFERRAL_BONUS = "referral_bonus", "Referral Bonus"
+        ADMIN_ADJUSTMENT = "admin_adjustment", "Admin Adjustment"
+        WEAK_TOPIC_UNLOCK = "weak_topic_unlock", "Weak Topic Unlock"
+        TIMER_RESET = "timer_reset", "Timer Reset"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey("User", on_delete=models.CASCADE, related_name="token_transactions")
+    transaction_type = models.CharField(max_length=50, choices=TransactionType.choices)
+    amount = models.IntegerField()
+    balance_after = models.PositiveIntegerField()
+    note = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey("User", null=True, blank=True, on_delete=models.SET_NULL, related_name="managed_token_transactions")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email}: {self.amount} ({self.transaction_type})"

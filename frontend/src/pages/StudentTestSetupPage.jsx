@@ -151,7 +151,7 @@ function StudentTestSetupPage() {
           ) : (
             <>
               <p>A payment unlock is required before another attempt can start.</p>
-              <Button className="button button-primary" onClick={() => navigate("/student/payment")}>
+              <Button className="button button-primary" onClick={() => navigate("/student/profile")}>
                 Pay and unlock retest
               </Button>
             </>
@@ -174,7 +174,7 @@ function StudentTestSetupPage() {
               className="button button-primary"
               onClick={() => {
                 setSelectedFlow(latestReport.exam, latestReport.subject);
-                navigate("/student/start");
+                navigate("/student");
               }}
             >
               Retest now

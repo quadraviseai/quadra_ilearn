@@ -1,6 +1,7 @@
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -23,9 +24,10 @@ class StudentDashboardSummaryView(APIView):
 
 class StudentProfileView(APIView):
     permission_classes = [IsStudent]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        serializer = StudentProfileSerializer(request.user.student_profile)
+        serializer = StudentProfileSerializer(request.user.student_profile, context={"request": request})
         return Response(serializer.data)
 
     def patch(self, request):
@@ -33,6 +35,7 @@ class StudentProfileView(APIView):
             request.user.student_profile,
             data=request.data,
             partial=True,
+            context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()

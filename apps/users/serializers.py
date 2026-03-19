@@ -6,9 +6,17 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.guardians.models import GuardianProfile
 from apps.students.models import StudentProfile
 from apps.users.models import User
+from apps.users.services import (
+    TokenError,
+    apply_referral_bonus,
+    get_token_settings,
+    grant_welcome_tokens_if_eligible,
+    serialize_token_settings,
+)
 
 
 def issue_auth_tokens(user):
+    user = grant_welcome_tokens_if_eligible(user)
     refresh = RefreshToken.for_user(user)
     return {
         "refresh": str(refresh),
@@ -36,9 +44,14 @@ def verify_google_id_token(credential, audience):
 
 
 class UserSummarySerializer(serializers.ModelSerializer):
+    token_settings = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id", "email", "phone", "role", "is_verified"]
+        fields = ["id", "email", "phone", "role", "is_verified", "token_balance", "referral_code", "token_settings"]
+
+    def get_token_settings(self, _obj):
+        return serialize_token_settings(get_token_settings())
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -54,11 +67,18 @@ class RegisterSerializer(serializers.Serializer):
     primary_target_exam = serializers.CharField(max_length=100, required=False, allow_blank=True)
     secondary_target_exam = serializers.CharField(max_length=100, required=False, allow_blank=True)
     relationship_to_student = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    referral_code = serializers.CharField(max_length=24, required=False, allow_blank=True)
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
+
+    def validate_referral_code(self, value):
+        normalized = str(value or "").strip().upper()
+        if normalized and not User.objects.filter(referral_code=normalized).exists():
+            raise serializers.ValidationError("Invalid referral code.")
+        return normalized
 
     def validate(self, attrs):
         return attrs
@@ -74,6 +94,7 @@ class RegisterSerializer(serializers.Serializer):
         primary_target_exam = validated_data.pop("primary_target_exam", "")
         secondary_target_exam = validated_data.pop("secondary_target_exam", "")
         relationship_to_student = validated_data.pop("relationship_to_student", "")
+        referral_code = validated_data.pop("referral_code", "")
 
         user = User.objects.create_user(
             email=validated_data["email"],
@@ -98,6 +119,12 @@ class RegisterSerializer(serializers.Serializer):
                 full_name=name,
                 relationship_to_student=relationship_to_student,
             )
+        user = grant_welcome_tokens_if_eligible(user)
+        if referral_code:
+            try:
+                user = apply_referral_bonus(user, referral_code)
+            except TokenError as exc:
+                raise serializers.ValidationError({"referral_code": str(exc)}) from exc
         return user
 
 
@@ -134,6 +161,7 @@ class GoogleAuthSerializer(serializers.Serializer):
     primary_target_exam = serializers.CharField(max_length=100, required=False, allow_blank=True)
     secondary_target_exam = serializers.CharField(max_length=100, required=False, allow_blank=True)
     relationship_to_student = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    referral_code = serializers.CharField(max_length=24, required=False, allow_blank=True)
 
     default_error_messages = {
         "google_not_configured": "Google authentication is not configured on the server.",
@@ -144,6 +172,12 @@ class GoogleAuthSerializer(serializers.Serializer):
         "register_exists_email": "An account with this email already exists. Use email/password login instead.",
         "google_subject_mismatch": "This Google account does not match the registered Google user.",
     }
+
+    def validate_referral_code(self, value):
+        normalized = str(value or "").strip().upper()
+        if normalized and not User.objects.filter(referral_code=normalized).exists():
+            raise serializers.ValidationError("Invalid referral code.")
+        return normalized
 
     def validate(self, attrs):
         client_ids = [
@@ -202,6 +236,7 @@ class GoogleAuthSerializer(serializers.Serializer):
             return issue_auth_tokens(user)
 
         role = validated_data["role"]
+        referral_code = validated_data.get("referral_code", "")
         user = User.objects.create_user(
             email=validated_data["email"],
             password=None,
@@ -230,4 +265,10 @@ class GoogleAuthSerializer(serializers.Serializer):
                 relationship_to_student=validated_data.get("relationship_to_student", ""),
             )
 
+        user = grant_welcome_tokens_if_eligible(user)
+        if referral_code:
+            try:
+                user = apply_referral_bonus(user, referral_code)
+            except TokenError as exc:
+                raise serializers.ValidationError({"referral_code": str(exc)}) from exc
         return issue_auth_tokens(user)

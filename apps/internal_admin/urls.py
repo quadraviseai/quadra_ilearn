@@ -22,15 +22,19 @@ from apps.internal_admin.views import (
     AdminTemplateDetailView,
     AdminTemplateJsonImportView,
     AdminTemplateListCreateView,
+    AdminTokenSettingsView,
     AdminUserDetailView,
     AdminUserListCreateView,
+    AdminUserTokenTransactionListView,
 )
 
 
 urlpatterns = [
     path("dashboard", AdminDashboardView.as_view(), name="admin-dashboard"),
+    path("token-settings", AdminTokenSettingsView.as_view(), name="admin-token-settings"),
     path("users", AdminUserListCreateView.as_view(), name="admin-users"),
     path("users/<uuid:user_id>", AdminUserDetailView.as_view(), name="admin-user-detail"),
+    path("users/<uuid:user_id>/token-transactions", AdminUserTokenTransactionListView.as_view(), name="admin-user-token-transactions"),
     path("exams", AdminExamListCreateView.as_view(), name="admin-exams"),
     path("exams/<uuid:exam_id>", AdminExamDetailView.as_view(), name="admin-exam-detail"),
     path("subjects", AdminSubjectListCreateView.as_view(), name="admin-subjects"),

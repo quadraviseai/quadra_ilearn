@@ -209,6 +209,18 @@ function StudentDashboardPage() {
               Topics to revise next so you improve faster with focused practice.
             </Typography.Paragraph>
           </Card>
+          <Card className="student-summary-card student-summary-card-inline student-antd-card" variant="borderless">
+            <div className="student-summary-card-head">
+              <span className="student-summary-icon" aria-hidden="true">
+                <BulbOutlined />
+              </span>
+              <span className="student-summary-card-label">Tokens</span>
+            </div>
+            <Statistic title="" value={summary?.token_balance ?? 0} />
+            <Typography.Paragraph>
+              Referral code: <strong>{summary?.referral_code || "Not ready"}</strong>
+            </Typography.Paragraph>
+          </Card>
         </div>
       </Card>
 

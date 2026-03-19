@@ -9,8 +9,10 @@ import {
   fetchWeakTopicAIReview,
   setSelectedFlow,
 } from "../lib/studentFlowApi.js";
+import { useAuth } from "../state/AuthContext.jsx";
 
 function StudentLearnPage() {
+  const { user, refreshCurrentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -21,6 +23,7 @@ function StudentLearnPage() {
   const [learningCards, setLearningCards] = useState([]);
   const [aiReview, setAiReview] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [learningMeta, setLearningMeta] = useState({ token_balance: 0, token_settings: null, unlocked_concept_ids: [] });
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +44,11 @@ function StudentLearnPage() {
         }
         setReport(reportData);
         setLearningCards(learningData.learning_cards || []);
+        setLearningMeta({
+          token_balance: learningData.token_balance ?? user?.token_balance ?? 0,
+          token_settings: learningData.token_settings ?? null,
+          unlocked_concept_ids: learningData.unlocked_concept_ids ?? [],
+        });
 
         if (conceptId) {
           setAiLoading(true);
@@ -48,6 +56,14 @@ function StudentLearnPage() {
             const aiData = await fetchWeakTopicAIReview(reportData.id, conceptId);
             if (!cancelled) {
               setAiReview(aiData);
+              setLearningMeta((current) => ({
+                ...current,
+                token_balance: aiData.token_balance ?? current.token_balance,
+                unlocked_concept_ids: current.unlocked_concept_ids.includes(conceptId)
+                  ? current.unlocked_concept_ids
+                  : [...current.unlocked_concept_ids, conceptId],
+              }));
+              await refreshCurrentUser();
             }
           } catch (error) {
             if (!cancelled) {
@@ -78,7 +94,7 @@ function StudentLearnPage() {
     return () => {
       cancelled = true;
     };
-  }, [reportId, conceptId]);
+  }, [conceptId, refreshCurrentUser, reportId, user?.token_balance]);
 
   const filteredCards = useMemo(() => {
     if (!conceptId) {
@@ -88,6 +104,8 @@ function StudentLearnPage() {
   }, [conceptId, learningCards]);
 
   const selectedCard = filteredCards[0] ?? null;
+  const weakTopicCost = learningMeta.token_settings?.weak_topic_unlock_cost ?? user?.token_settings?.weak_topic_unlock_cost ?? 0;
+  const alreadyUnlocked = conceptId ? learningMeta.unlocked_concept_ids.includes(conceptId) : false;
 
   if (loading) {
     return <Spin size="large" />;
@@ -129,6 +147,12 @@ function StudentLearnPage() {
               ? `Focused guidance for ${selectedCard.topic} in ${selectedCard.chapter || report.subject_name}.`
               : `Teacher-style review for your weak topics from ${report.subject_name}.`}
           </p>
+          {conceptId ? (
+            <p>
+              Tokens: <strong>{learningMeta.token_balance}</strong>
+              {alreadyUnlocked ? " | This weak topic is already unlocked." : ` | Unlock cost: ${weakTopicCost} tokens`}
+            </p>
+          ) : null}
         </div>
         <div className="student-learn-hero-actions">
           <Button onClick={() => navigate(`/student/report?reportId=${report.id}`)}>Back to report</Button>
@@ -136,7 +160,7 @@ function StudentLearnPage() {
             className="button button-primary"
             onClick={() => {
               setSelectedFlow(report.exam, report.subject);
-              navigate("/student/start");
+              navigate("/student");
             }}
           >
             Start retest

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, Progress, Spin, message } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { fetchAttemptDetail, saveAnswer, submitAttempt } from "../lib/studentFlowApi.js";
+import { fetchAttemptDetail, resetAttemptTimer, saveAnswer, submitAttempt } from "../lib/studentFlowApi.js";
+import { useAuth } from "../state/AuthContext.jsx";
 
 const ATTEMPT_ALERT_MESSAGE =
   "You are not serious. Don't worry, we are giving you another chance. Select your answer. Don't worry if it can be wrong, we will guide you to solve this type of answer.";
@@ -58,6 +59,7 @@ function getRemainingSecondsFromEndsAt(endsAt) {
 }
 
 function StudentMockTestPage() {
+  const { user, refreshCurrentUser } = useAuth();
   const navigate = useNavigate();
   const { attemptId } = useParams();
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,7 @@ function StudentMockTestPage() {
   const [timeExpiredOpen, setTimeExpiredOpen] = useState(false);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [retryPaymentLoading, setRetryPaymentLoading] = useState(false);
+  const [tokenMeta, setTokenMeta] = useState({ token_balance: user?.token_balance ?? 0, timer_reset_cost: user?.token_settings?.timer_reset_cost ?? 0 });
   const [countdownReady, setCountdownReady] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
   const lastAlertAtRef = useRef(0);
@@ -93,10 +96,14 @@ function StudentMockTestPage() {
         }
         setAttempt(detail.attempt);
         setQuestions(detail.questions);
+        setTokenMeta({
+          token_balance: detail.token_balance ?? user?.token_balance ?? 0,
+          timer_reset_cost: detail.token_settings?.timer_reset_cost ?? user?.token_settings?.timer_reset_cost ?? 0,
+        });
       } catch (error) {
         if (!cancelled) {
           message.error(error.message);
-          navigate("/student/start", { replace: true });
+          navigate("/student", { replace: true });
         }
       } finally {
         if (!cancelled) {
@@ -109,7 +116,7 @@ function StudentMockTestPage() {
     return () => {
       cancelled = true;
     };
-  }, [attemptId, navigate]);
+  }, [attemptId, navigate, user?.token_balance, user?.token_settings?.timer_reset_cost]);
 
   useEffect(() => {
     if (!attempt?.id) {
@@ -343,8 +350,8 @@ function StudentMockTestPage() {
 
     setRetryPaymentLoading(true);
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 900));
-      const resetDurationSeconds = Math.max(questions.length, 1) * 60;
+      const data = await resetAttemptTimer(attempt.id);
+      const resetDurationSeconds = data.reset_duration_seconds || Math.max(questions.length, 1) * 60;
       const nextEndsAt = Date.now() + resetDurationSeconds * 1000;
       pauseStartedAtRef.current = null;
       countdownEndsAtRef.current = nextEndsAt;
@@ -354,7 +361,14 @@ function StudentMockTestPage() {
       setCountdownReady(true);
       setRemainingSeconds(getRemainingSecondsFromEndsAt(nextEndsAt));
       setTimeExpiredOpen(false);
-      message.success("Payment successful. Your timer has been reset.");
+      setTokenMeta((current) => ({
+        ...current,
+        token_balance: data.token_balance ?? current.token_balance,
+      }));
+      await refreshCurrentUser();
+      message.success(`Timer reset unlocked. ${data.tokens_spent ?? tokenMeta.timer_reset_cost} tokens used.`);
+    } catch (error) {
+      message.error(error.message);
     } finally {
       setRetryPaymentLoading(false);
     }
@@ -407,6 +421,10 @@ function StudentMockTestPage() {
             <div>
               <span>Warnings</span>
               <strong>{violationCount}</strong>
+            </div>
+            <div>
+              <span>Tokens</span>
+              <strong>{tokenMeta.token_balance}</strong>
             </div>
           </div>
         </header>
@@ -522,14 +540,14 @@ function StudentMockTestPage() {
       >
         <div className="student-attempt-warning">
           <p>
-            Your time is up, but don't worry. If you want to retry, pay only Rs. 2 to reset the timer and continue this mock test.
+            Your time is up. Spend {tokenMeta.timer_reset_cost} tokens to reset the timer and continue this mock test, or submit now and view your result.
           </p>
           <div className="student-timeup-actions">
             <Button className="student-timeup-secondary" onClick={() => void performSubmit()} disabled={retryPaymentLoading}>
               View result
             </Button>
             <button className="button button-primary student-timeup-primary" type="button" disabled={retryPaymentLoading} onClick={handleRetryPayment}>
-              {retryPaymentLoading ? "Processing Rs. 2..." : "Pay Rs. 2 and retry"}
+              {retryPaymentLoading ? "Unlocking..." : `Use ${tokenMeta.timer_reset_cost} tokens`}
             </button>
           </div>
         </div>

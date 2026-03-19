@@ -3,6 +3,7 @@ from rest_framework import serializers
 from apps.diagnostics.models import ConceptMastery, TestAttempt
 from apps.learning_health.serializers import LearningHealthSnapshotSerializer
 from apps.students.models import StudentProfile
+from apps.users.services import TokenError, apply_referral_bonus, get_token_settings, serialize_token_settings
 
 
 class WeakConceptSerializer(serializers.ModelSerializer):
@@ -27,6 +28,9 @@ class StudentDashboardSummarySerializer(serializers.ModelSerializer):
     streak = serializers.SerializerMethodField()
     weak_concepts = serializers.SerializerMethodField()
     recent_attempts = serializers.SerializerMethodField()
+    token_balance = serializers.IntegerField(source="user.token_balance", read_only=True)
+    referral_code = serializers.CharField(source="user.referral_code", read_only=True)
+    token_settings = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
@@ -38,6 +42,9 @@ class StudentDashboardSummarySerializer(serializers.ModelSerializer):
             "board",
             "primary_target_exam",
             "secondary_target_exam",
+            "token_balance",
+            "referral_code",
+            "token_settings",
             "latest_learning_health",
             "streak",
             "weak_concepts",
@@ -74,10 +81,20 @@ class StudentDashboardSummarySerializer(serializers.ModelSerializer):
         )
         return RecentAttemptSerializer(attempts, many=True).data
 
+    def get_token_settings(self, _obj):
+        return serialize_token_settings(get_token_settings())
+
 
 class StudentProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     phone = serializers.CharField(source="user.phone", allow_blank=True, required=False)
+    token_balance = serializers.IntegerField(source="user.token_balance", read_only=True)
+    referral_code = serializers.CharField(source="user.referral_code", read_only=True)
+    referred_by_email = serializers.EmailField(source="user.referred_by.email", read_only=True)
+    referral_code_input = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    profile_image_url = serializers.SerializerMethodField()
+    profile_image_upload = serializers.FileField(write_only=True, required=False, allow_null=True)
+    token_settings = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
@@ -90,18 +107,43 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "board",
             "school_name",
+            "profile_image_url",
+            "profile_image_upload",
             "primary_target_exam",
             "secondary_target_exam",
+            "token_balance",
+            "referral_code",
+            "referred_by_email",
+            "referral_code_input",
+            "token_settings",
             "ai_exam_suggestions",
             "ai_exam_suggestions_generated_at",
             "timezone",
         ]
         read_only_fields = ["ai_exam_suggestions", "ai_exam_suggestions_generated_at"]
 
+    def get_token_settings(self, _obj):
+        return serialize_token_settings(get_token_settings())
+
+    def get_profile_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.profile_image:
+            url = obj.profile_image.url
+            return request.build_absolute_uri(url) if request else url
+        return obj.profile_image_url
+
+    def validate_referral_code_input(self, value):
+        return str(value or "").strip().upper()
+
     def update(self, instance, validated_data):
         user_data = validated_data.pop("user", {})
+        referral_code_input = validated_data.pop("referral_code_input", "")
+        uploaded_profile_image = validated_data.pop("profile_image_upload", None)
         for field, value in validated_data.items():
             setattr(instance, field, value)
+        if uploaded_profile_image is not None:
+            instance.profile_image = uploaded_profile_image
+            instance.profile_image_url = ""
         instance.save()
 
         if user_data:
@@ -109,6 +151,13 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                 setattr(instance.user, field, value)
             instance.user.save(update_fields=list(user_data.keys()) + ["updated_at"])
 
+        if referral_code_input:
+            try:
+                apply_referral_bonus(instance.user, referral_code_input)
+            except TokenError as exc:
+                raise serializers.ValidationError({"referral_code_input": str(exc)}) from exc
+
+        instance.refresh_from_db()
         return instance
 
 

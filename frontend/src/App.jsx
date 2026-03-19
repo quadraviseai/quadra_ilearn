@@ -11,15 +11,15 @@ const LoginPage = lazy(() => import("./pages/LoginPage.jsx"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage.jsx"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.jsx"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage.jsx"));
+const AdminTokenRulesPage = lazy(() => import("./pages/AdminTokenRulesPage.jsx"));
 const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage.jsx"));
 const AdminContentPage = lazy(() => import("./pages/AdminContentPage.jsx"));
 const GuardianDashboardPage = lazy(() => import("./pages/GuardianDashboardPage.jsx"));
 const StudentExamSelectionPage = lazy(() => import("./pages/StudentExamSelectionPage.jsx"));
-const StudentTestSetupPage = lazy(() => import("./pages/StudentTestSetupPage.jsx"));
 const StudentMockTestPage = lazy(() => import("./pages/StudentMockTestPage.jsx"));
+const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage.jsx"));
 const StudentReportPage = lazy(() => import("./pages/StudentReportPage.jsx"));
 const StudentLearnPage = lazy(() => import("./pages/StudentLearnPage.jsx"));
-const StudentPaymentPage = lazy(() => import("./pages/StudentPaymentPage.jsx"));
 
 function App() {
   return (
@@ -38,6 +38,7 @@ function App() {
           }
         >
           <Route index element={<AdminDashboardPage />} />
+          <Route path="token-rules" element={<AdminTokenRulesPage />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="content" element={<AdminContentPage />} />
         </Route>
@@ -50,11 +51,10 @@ function App() {
           }
         >
           <Route index element={<StudentExamSelectionPage />} />
-          <Route path="start" element={<StudentTestSetupPage />} />
           <Route path="attempt/:attemptId" element={<StudentMockTestPage />} />
+          <Route path="profile" element={<StudentProfilePage />} />
           <Route path="report" element={<StudentReportPage />} />
           <Route path="learn" element={<StudentLearnPage />} />
-          <Route path="payment" element={<StudentPaymentPage />} />
         </Route>
         <Route
           path="/guardian"
