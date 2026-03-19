@@ -4,4 +4,8 @@ __pycache__/
 .env
 staticfiles/
 .playwright-cli/
+.expo/
+mobile/.expo/
+node_modules/
+mobile/node_modules/
 *.log

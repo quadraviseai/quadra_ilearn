@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeftOutlined, CheckCircleOutlined, ClockCircleOutlined, ReadOutlined } from "@ant-design/icons";
-import { Button, Card, Empty, Tag, Typography } from "antd";
+import {
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ReadOutlined,
+  RadarChartOutlined,
+} from "@ant-design/icons";
+import { Button, Card, Empty, Progress, Tag, Typography } from "antd";
 
 import FormMessage from "../components/FormMessage.jsx";
 import { apiRequest } from "../lib/api.js";
@@ -150,10 +156,24 @@ function StudentStudySessionPage() {
   }, [selectedExam, taskId, token]);
 
   const studySteps = normalizeStudySteps(selectedExamContent?.study_steps);
+  const completedStepIndexes = Array.isArray(selectedExamContent?.completed_step_indexes)
+    ? selectedExamContent.completed_step_indexes.filter((index) => Number.isInteger(index))
+    : [];
+  const coveredStepIndexes = new Set(completedStepIndexes);
+  studySteps.forEach((step, index) => {
+    if (step.session) {
+      coveredStepIndexes.add(index);
+    }
+  });
+  const completedSteps = studySteps.length ? Math.min(coveredStepIndexes.size, studySteps.length) : 0;
+  const studyProgressPercent = studySteps.length
+    ? Math.round((completedSteps / studySteps.length) * 100)
+    : 0;
+  const canMarkCompleted = studySteps.length > 0 && completedSteps === studySteps.length;
 
   const handleStartStep = async (stepIndex) => {
-    if (studySteps[stepIndex]?.session) {
-      setOpenStepIndex((current) => (current === stepIndex ? -1 : stepIndex));
+    if (studySteps[stepIndex]?.session && openStepIndex === stepIndex) {
+      setOpenStepIndex(-1);
       return;
     }
 
@@ -219,7 +239,14 @@ function StudentStudySessionPage() {
               <div className="study-plan-metric">
                 <ReadOutlined className="study-plan-metric-icon" />
                 <Typography.Text>{task.concept_name || "General topic"}</Typography.Text>
-                <strong>{studySteps.length} steps</strong>
+                <strong>{completedSteps}/{studySteps.length || 0} steps covered</strong>
+                <Progress
+                  percent={studyProgressPercent}
+                  showInfo={false}
+                  strokeColor="#fb6404"
+                  trailColor="rgba(255, 255, 255, 0.2)"
+                  className="study-plan-metric-progress"
+                />
               </div>
               <div className="study-plan-metric">
                 <ClockCircleOutlined className="study-plan-metric-icon" />
@@ -237,18 +264,46 @@ function StudentStudySessionPage() {
                 className="button button-primary"
                 onClick={handleMarkCompleted}
                 loading={state.completing}
-                disabled={task.status === "done"}
+                disabled={task.status === "done" || !canMarkCompleted}
               >
                 {task.status === "done" ? "Completed" : "Mark as completed"}
               </Button>
             </div>
+            {!canMarkCompleted && task.status !== "done" ? (
+              <Typography.Paragraph className="study-session-progress-note">
+                Complete all study steps to unlock task completion.
+              </Typography.Paragraph>
+            ) : null}
           </>
         ) : null}
       </Card>
 
       <FormMessage>{state.error}</FormMessage>
 
-      {state.loading ? <Card className="study-plan-board study-plan-board-surface">Loading study session...</Card> : null}
+      {state.loading ? (
+        <Card className="study-plan-board study-plan-board-surface study-session-loader-card" variant="borderless">
+          <div className="study-session-loader">
+            <div className="study-session-loader-visual" aria-hidden="true">
+              <span className="study-session-loader-orbit study-session-loader-orbit-one" />
+              <span className="study-session-loader-orbit study-session-loader-orbit-two" />
+              <span className="study-session-loader-core">
+                <ReadOutlined />
+              </span>
+            </div>
+            <div className="study-session-loader-copy">
+              <Typography.Title level={4}>Loading study session...</Typography.Title>
+              <Typography.Paragraph>
+                Preparing your exam-focused walkthrough, key points, and guided study steps.
+              </Typography.Paragraph>
+            </div>
+            <div className="study-session-loader-bars" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {!state.loading && !task ? (
         <Card className="study-plan-board study-plan-board-surface">
@@ -258,27 +313,45 @@ function StudentStudySessionPage() {
 
       {!state.loading && task ? (
         <div className="study-session-layout">
-          <Card className="study-session-card student-antd-card" variant="borderless">
-            <Typography.Title level={4}>Exam focus</Typography.Title>
-            <Typography.Paragraph>
-              {renderMathText(
-                selectedExamContent?.exam_focus || "Use this session to strengthen the concept for your target exam."
-              )}
-            </Typography.Paragraph>
+          <Card className="study-session-card student-antd-card study-session-focus-card" variant="borderless">
+            <div className="study-session-focus-head">
+              <div>
+                <span className="study-session-focus-kicker">Exam focus</span>
+                <Typography.Title level={4}>What matters most for this session</Typography.Title>
+              </div>
+              <Tag className="study-session-focus-exam-tag" bordered={false}>
+                {selectedExam || "General"}
+              </Tag>
+            </div>
 
-            <Typography.Title level={5}>Key points to keep in mind</Typography.Title>
-            <ul className="study-session-list">
-              {(selectedExamContent?.key_points || []).map((item) => (
-                <li key={item}>{renderMathText(item)}</li>
-              ))}
-            </ul>
+            <div className="study-session-focus-callout">
+              <span className="study-session-focus-icon" aria-hidden="true">
+                <RadarChartOutlined />
+              </span>
+              <Typography.Paragraph>
+                {renderMathText(
+                  selectedExamContent?.exam_focus || "Use this session to strengthen the concept for your target exam."
+                )}
+              </Typography.Paragraph>
+            </div>
 
-            <Typography.Title level={5}>Quick self-check</Typography.Title>
-            <ul className="study-session-list">
-              {(selectedExamContent?.quick_check || []).map((item) => (
-                <li key={item}>{renderMathText(item)}</li>
-              ))}
-            </ul>
+            <div className="study-session-focus-section">
+              <Typography.Title level={5}>Key points to keep in mind</Typography.Title>
+              <ul className="study-session-list study-session-focus-list">
+                {(selectedExamContent?.key_points || []).map((item) => (
+                  <li key={item}>{renderMathText(item)}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="study-session-focus-section study-session-focus-section-alt">
+              <Typography.Title level={5}>Quick self-check</Typography.Title>
+              <ul className="study-session-list study-session-focus-list">
+                {(selectedExamContent?.quick_check || []).map((item) => (
+                  <li key={item}>{renderMathText(item)}</li>
+                ))}
+              </ul>
+            </div>
           </Card>
 
           <div className="study-session-steps">

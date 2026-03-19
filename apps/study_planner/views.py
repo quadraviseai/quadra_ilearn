@@ -52,6 +52,33 @@ def set_exam_specific_content(task, selected_exam, exam_content):
     task.ai_study_content = cache
 
 
+def get_completed_step_indexes(exam_content):
+    completed = exam_content.get("completed_step_indexes", [])
+    if not isinstance(completed, list):
+        return []
+    return [index for index in completed if isinstance(index, int)]
+
+
+def mark_step_completed(exam_content, step_index):
+    completed = set(get_completed_step_indexes(exam_content))
+    completed.add(step_index)
+    exam_content["completed_step_indexes"] = sorted(completed)
+
+
+def get_task_completion_status(task):
+    cache = get_task_content_cache(task)
+    selected_exam = cache["selected_exam"] or next(iter(cache["exam_content"]), "")
+    exam_content = cache["exam_content"].get(selected_exam, {})
+    study_steps = exam_content.get("study_steps", [])
+    total_steps = len(study_steps) if isinstance(study_steps, list) else 0
+    completed_steps = len(get_completed_step_indexes(exam_content))
+    return {
+        "selected_exam": selected_exam,
+        "total_steps": total_steps,
+        "completed_steps": min(completed_steps, total_steps),
+    }
+
+
 def has_structured_study_content(content):
     if not isinstance(content, dict):
         return False
@@ -117,6 +144,17 @@ class StudyPlanTaskUpdateView(APIView):
             plan__student=request.user.student_profile,
             plan__status="active",
         )
+        if request.data.get("status") == StudyPlanTask.Status.DONE:
+            completion_status = get_task_completion_status(task)
+            if completion_status["total_steps"] and completion_status["completed_steps"] < completion_status["total_steps"]:
+                raise ValidationError(
+                    {
+                        "detail": (
+                            f"Complete all study steps before marking this task done. "
+                            f"{completion_status['completed_steps']} of {completion_status['total_steps']} covered."
+                        )
+                    }
+                )
         serializer = StudyPlanTaskUpdateSerializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -206,6 +244,7 @@ class StudyPlanTaskStepStartView(APIView):
             task.status = StudyPlanTask.Status.IN_PROGRESS
 
         exam_content["study_steps"] = steps
+        mark_step_completed(exam_content, step_index)
         set_exam_specific_content(task, selected_exam, exam_content)
         task.save(update_fields=["status", "ai_study_content", "ai_study_content_generated_at"])
         return Response(StudyPlanTaskSerializer(task).data)

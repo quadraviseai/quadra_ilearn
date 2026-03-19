@@ -5,11 +5,9 @@ import quadraviseLogo from "../assets/quadravise_logo.png";
 import { useAuth } from "../state/AuthContext.jsx";
 
 const studentLinks = [
-  { to: "/student", label: "Dashboard" },
-  { to: "/student/leaderboard", label: "Leaderboard" },
-  { to: "/student/study-plan", label: "Study Plan" },
-  { to: "/student/invites", label: "Accept Invite" },
-  { to: "/student/profile", label: "Profile" },
+  { to: "/student", label: "Exams" },
+  { to: "/student/report", label: "Report" },
+  { to: "/student/payment", label: "Payment" },
 ];
 
 const guardianLinks = [
@@ -57,7 +55,7 @@ function AppShell() {
               <img src={quadraviseLogo} alt="Quadravise logo" className="brand-mark-image" />
             </span>
             <div className="workspace-brand-copy">
-              <strong>Quadravise</strong>
+              <strong>QuadraILearn</strong>
             </div>
           </div>
           <nav className="workspace-nav workspace-nav-header">

@@ -102,8 +102,8 @@ class StudyPlannerApiTests(APITestCase):
             {"status": StudyPlanTask.Status.DONE},
             format="json",
         )
-        self.assertEqual(done_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(done_response.data["status"], StudyPlanTask.Status.DONE)
+        self.assertEqual(done_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Complete all study steps", done_response.data["detail"])
 
     @patch("apps.study_planner.views.generate_study_content_for_task")
     def test_start_study_generates_and_caches_ai_content(self, mock_generate):
@@ -237,4 +237,55 @@ class StudyPlannerApiTests(APITestCase):
         step_session = response.data["ai_study_content"]["exam_content"]["JEE Main"]["study_steps"][0]["session"]
         self.assertEqual(step_session["heading"], "Build the core idea for JEE Main")
         self.assertEqual(step_session["exam_scope_note"], "Stay within JEE Main level formula work.")
+        self.assertEqual(
+            response.data["ai_study_content"]["exam_content"]["JEE Main"]["completed_step_indexes"],
+            [0],
+        )
         mock_generate_step.assert_called_once()
+
+    @patch("apps.study_planner.views.generate_study_content_for_task")
+    def test_task_can_be_marked_done_after_all_steps_are_covered(self, mock_generate):
+        self.student.board = "CBSE"
+        self.student.primary_target_exam = "JEE Main"
+        self.student.save(update_fields=["board", "primary_target_exam", "updated_at"])
+
+        regenerate_response = self.client.post("/api/study-planner/regenerate", {}, format="json")
+        task_id = regenerate_response.data["tasks"][0]["id"]
+        mock_generate.return_value = {
+            "heading": "Master Motion for JEE Main",
+            "overview": "Focus on displacement, velocity, and acceleration first.",
+            "exam_focus": "Typical objective questions test graphs and formulas.",
+            "key_points": ["Distance vs displacement", "Speed vs velocity", "Acceleration basics"],
+            "study_steps": [
+                {
+                    "title": "Build the core idea",
+                    "detail": "Read the basic definitions first and connect each term to a real motion example.",
+                    "checkpoints": ["Define displacement", "Compare speed and velocity"],
+                    "session": {"target_exam": "JEE Main", "heading": "Session 1"},
+                },
+                {
+                    "title": "Practice the formula layer",
+                    "detail": "Work through direct formula questions before moving to graph interpretation.",
+                    "checkpoints": ["Use three motion formulas", "Check units"],
+                    "session": {"target_exam": "JEE Main", "heading": "Session 2"},
+                },
+            ],
+            "quick_check": ["Define velocity", "Interpret a graph", "Identify acceleration sign"],
+            "completed_step_indexes": [0, 1],
+            "target_exam": "JEE Main",
+        }
+
+        start_response = self.client.post(
+            f"/api/study-planner/tasks/{task_id}/start",
+            {"target_exam": "JEE Main"},
+            format="json",
+        )
+        self.assertEqual(start_response.status_code, status.HTTP_200_OK)
+
+        done_response = self.client.patch(
+            f"/api/study-planner/tasks/{task_id}",
+            {"status": StudyPlanTask.Status.DONE},
+            format="json",
+        )
+        self.assertEqual(done_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(done_response.data["status"], StudyPlanTask.Status.DONE)

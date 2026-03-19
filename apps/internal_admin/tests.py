@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.diagnostics.models import Concept, Exam, Question, Subject
+from apps.diagnostics.models import Chapter, Concept, Exam, Question, QuestionTemplate, Subject
 from apps.guardians.models import GuardianProfile
 from apps.students.models import StudentProfile
 
@@ -52,8 +52,11 @@ class InternalAdminApiTests(APITestCase):
         exam_two = Exam.objects.create(name="Olympiad", slug="olympiad")
         subject = Subject.objects.create(name="Mathematics", slug="mathematics")
         subject.exams.set([exam_one, exam_two])
+        chapter = Chapter.objects.create(subject=subject, name="Algebra", slug="algebra")
+        chapter.exams.set([exam_one, exam_two])
         concept = Concept.objects.create(
             subject=subject,
+            chapter=chapter,
             name="Algebra",
             slug="algebra",
             description="Expressions and equations",
@@ -65,6 +68,7 @@ class InternalAdminApiTests(APITestCase):
             reverse("admin-questions"),
             {
                 "subject_id": str(subject.id),
+                "chapter_id": str(chapter.id),
                 "concept_id": str(concept.id),
                 "exam_ids": [str(exam_one.id), str(exam_two.id)],
                 "exam_type": ["JEE Main", "Olympiad"],
@@ -106,10 +110,18 @@ class InternalAdminApiTests(APITestCase):
         self.assertEqual(subject_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(subject_response.data["slug"], "social-science")
 
+        chapter_response = self.client.post(
+            reverse("admin-chapters"),
+            {"subject": subject_response.data["id"], "name": "Foundations", "exam_ids": []},
+            format="json",
+        )
+        self.assertEqual(chapter_response.status_code, status.HTTP_201_CREATED)
+
         concept_response = self.client.post(
             reverse("admin-concepts"),
             {
                 "subject": subject_response.data["id"],
+                "chapter": chapter_response.data["id"],
                 "name": "Civics Basics",
                 "description": "Introductory civics",
                 "exam_ids": [],
@@ -175,6 +187,26 @@ class InternalAdminApiTests(APITestCase):
         self.assertEqual(guardian_user.guardian_profile.full_name, "Updated Guardian")
         self.assertEqual(guardian_user.guardian_profile.relationship_to_student, "")
 
+    def test_admin_can_delete_other_user_but_not_self(self):
+        student_user = User.objects.create_user(
+            email="delete-student@example.com",
+            password="strongpass123",
+            role=User.Role.STUDENT,
+        )
+        StudentProfile.objects.create(
+            user=student_user,
+            full_name="Delete Student",
+            class_name="10",
+        )
+
+        delete_response = self.client.delete(reverse("admin-user-detail", kwargs={"user_id": student_user.id}))
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(User.objects.filter(id=student_user.id).exists())
+
+        self_delete_response = self.client.delete(reverse("admin-user-detail", kwargs={"user_id": self.admin_user.id}))
+        self.assertEqual(self_delete_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(User.objects.filter(id=self.admin_user.id).exists())
+
     def test_admin_can_update_and_delete_subject(self):
         subject = Subject.objects.create(name="Physics", slug="physics")
 
@@ -192,7 +224,8 @@ class InternalAdminApiTests(APITestCase):
 
     def test_admin_can_update_and_delete_concept(self):
         subject = Subject.objects.create(name="Chemistry", slug="chemistry")
-        concept = Concept.objects.create(subject=subject, name="Atoms", slug="atoms")
+        chapter = Chapter.objects.create(subject=subject, name="Physical Chemistry", slug="physical-chemistry")
+        concept = Concept.objects.create(subject=subject, chapter=chapter, name="Atoms", slug="atoms")
 
         update_response = self.client.patch(
             reverse("admin-concept-detail", kwargs={"concept_id": concept.id}),
@@ -208,7 +241,8 @@ class InternalAdminApiTests(APITestCase):
 
     def test_admin_can_make_question_draft_and_delete_it(self):
         subject = Subject.objects.create(name="Biology", slug="biology")
-        concept = Concept.objects.create(subject=subject, name="Cells", slug="cells")
+        chapter = Chapter.objects.create(subject=subject, name="Cell Biology", slug="cell-biology")
+        concept = Concept.objects.create(subject=subject, chapter=chapter, name="Cells", slug="cells")
         question = Question.objects.create(
             subject=subject,
             concept=concept,
@@ -233,14 +267,18 @@ class InternalAdminApiTests(APITestCase):
         subject = Subject.objects.create(name="Economics", slug="economics")
         exam = Exam.objects.create(name="Boards", slug="boards")
         subject.exams.set([exam])
-        concept = Concept.objects.create(subject=subject, name="Demand", slug="demand")
+        chapter = Chapter.objects.create(subject=subject, name="Microeconomics", slug="microeconomics")
+        chapter.exams.set([exam])
+        concept = Concept.objects.create(subject=subject, chapter=chapter, name="Demand", slug="demand")
         concept.exams.set([exam])
 
         response = self.client.post(
             reverse("admin-question-bulk-upload"),
             {
                 "subject_id": str(subject.id),
+                "chapter_id": str(chapter.id),
                 "concept_id": str(concept.id),
+                "exam_ids": [str(exam.id)],
                 "questions": [
                     {
                         "exam_ids": [str(exam.id)],
@@ -261,13 +299,137 @@ class InternalAdminApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["count"], 1)
 
+    def test_admin_can_bulk_upload_concepts(self):
+        subject = Subject.objects.create(name="Physics", slug="physics")
+        exam = Exam.objects.create(name="JEE Main", slug="jee-main")
+        subject.exams.set([exam])
+        chapter = Chapter.objects.create(subject=subject, name="Mechanics", slug="mechanics")
+        chapter.exams.set([exam])
+        Concept.objects.create(subject=subject, chapter=chapter, name="Motion in a Straight Line", slug="motion")
+
+        response = self.client.post(
+            reverse("admin-concept-bulk-upload"),
+            {
+                "subject_id": str(subject.id),
+                "chapter_id": str(chapter.id),
+                "exam_ids": [str(exam.id)],
+                "concept_names": [
+                    "Motion in a Plane",
+                    " Work Energy Power ",
+                    "motion in a plane",
+                    "Motion in a Straight Line",
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["count"], 2)
+        self.assertTrue(
+            Concept.objects.filter(subject=subject, chapter=chapter, name="Motion in a Plane", exams=exam).exists()
+        )
+        self.assertTrue(
+            Concept.objects.filter(subject=subject, chapter=chapter, name="Work Energy Power", exams=exam).exists()
+        )
+
+    def test_admin_can_import_templates_from_json(self):
+        subject = Subject.objects.create(name="Math", slug="math")
+        exam = Exam.objects.create(name="JEE Main", slug="jee-main")
+        exam_two = Exam.objects.create(name="JEE Advanced", slug="jee-advanced")
+        subject.exams.set([exam, exam_two])
+        chapter = Chapter.objects.create(subject=subject, name="Sets", slug="sets")
+        chapter.exams.set([exam, exam_two])
+
+        response = self.client.post(
+            reverse("admin-template-json-import"),
+            {
+                "subject_name": "Math",
+                "chapter_name": "Sets",
+                "exam_names": ["JEE Main", "JEE Advanced"],
+                "concept_names": ["Inclusion-Exclusion", "Venn Diagrams"],
+                "templates": [
+                    {
+                        "concept_name": "Inclusion-Exclusion",
+                        "question_type": "mcq_single",
+                        "template_type": "reverse",
+                        "difficulty": QuestionTemplate.Difficulty.MEDIUM,
+                        "template_text": "In a class of {total} students, {x} students like Mathematics, {y} students like Physics and {z} students like both. How many students like neither subject?",
+                        "variables": {
+                            "total": {"min": 60, "max": 150},
+                            "x": {"min": 30, "max": 100},
+                            "y": {"min": 30, "max": 100},
+                            "z": {"min": 5, "max": 40},
+                        },
+                        "constraints": ["z <= x", "z <= y", "x + y - z <= total"],
+                        "distractor_logic": ["x + y - z", "total - x - y + z", "x + y", "total - z"],
+                        "formula": "total - (x + y - z)",
+                        "correct_answer_formula": "total - (x + y - z)",
+                        "jee_tags": ["word_problem", "inclusion_exclusion", "reverse_logic", "moderate_difficulty"],
+                        "expected_time_sec": 60,
+                        "status": QuestionTemplate.Status.ACTIVE,
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["count"], 1)
+        self.assertTrue(Concept.objects.filter(subject=subject, chapter=chapter, name="Inclusion-Exclusion").exists())
+        imported_template = QuestionTemplate.objects.get(concept__subject=subject, concept__chapter=chapter)
+        self.assertEqual(imported_template.template_type, QuestionTemplate.TemplateType.LOGIC_REVERSE_CONSTRAINT)
+        self.assertEqual(imported_template.correct_answer_formula, "total - (x + y - z)")
+        self.assertEqual(imported_template.expected_time_sec, 60)
+
+    def test_admin_template_import_auto_creates_missing_exams(self):
+        subject = Subject.objects.create(name="Math", slug="math")
+        chapter = Chapter.objects.create(subject=subject, name="Sets", slug="sets")
+
+        response = self.client.post(
+            reverse("admin-template-json-import"),
+            {
+                "subject_name": "Math",
+                "chapter_name": "Sets",
+                "exam_names": ["JEE Main", "JEE Advanced"],
+                "concept_names": ["Inclusion-Exclusion"],
+                "templates": [
+                    {
+                        "concept_name": "Inclusion-Exclusion",
+                        "question_type": "mcq_single",
+                        "template_type": "logic",
+                        "difficulty": QuestionTemplate.Difficulty.MEDIUM,
+                        "template_text": "If n(A)={x}, n(B)={y} and n(A∩B)={z}, find n(A∪B).",
+                        "variables": {
+                            "x": {"min": 20, "max": 80, "integer_only": True},
+                            "y": {"min": 20, "max": 80, "integer_only": True},
+                            "z": {"min": 5, "max": 30, "integer_only": True},
+                        },
+                        "constraints": ["z <= x", "z <= y"],
+                        "answer_formula": "x + y - z",
+                        "status": QuestionTemplate.Status.ACTIVE,
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_exams = list(Exam.objects.filter(name__in=["JEE Main", "JEE Advanced"]).order_by("name"))
+        self.assertEqual(len(created_exams), 2)
+        self.assertEqual(subject.exams.count(), 2)
+        self.assertEqual(chapter.exams.count(), 2)
+        concept = Concept.objects.get(subject=subject, chapter=chapter, name="Inclusion-Exclusion")
+        self.assertEqual(concept.exams.count(), 2)
+
     @patch("apps.internal_admin.serializers.generate_question_with_gemini")
     def test_admin_can_generate_question_with_ai(self, mocked_generate):
         subject = Subject.objects.create(name="Geography", slug="geography")
         exam_one = Exam.objects.create(name="Boards", slug="boards")
         exam_two = Exam.objects.create(name="Olympiad", slug="olympiad")
         subject.exams.set([exam_one, exam_two])
-        concept = Concept.objects.create(subject=subject, name="Climate", slug="climate")
+        chapter = Chapter.objects.create(subject=subject, name="Physical Geography", slug="physical-geography")
+        chapter.exams.set([exam_one, exam_two])
+        concept = Concept.objects.create(subject=subject, chapter=chapter, name="Climate", slug="climate")
         concept.exams.set([exam_one, exam_two])
         mocked_generate.return_value = {
             "prompt": "Which factor most directly affects climate?",
@@ -282,6 +444,7 @@ class InternalAdminApiTests(APITestCase):
             reverse("admin-question-ai-generate"),
             {
                 "subject_id": str(subject.id),
+                "chapter_id": str(chapter.id),
                 "concept_id": str(concept.id),
                 "exam_ids": [str(exam_one.id), str(exam_two.id)],
                 "exam_type": ["Boards", "Olympiad"],

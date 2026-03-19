@@ -26,21 +26,24 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { apiRequest } from "../lib/api.js";
+import AppRouteLoader from "../components/AppRouteLoader.jsx";
 import { useAuth } from "../state/AuthContext.jsx";
 
 function StudentDashboardPage() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [summaryState, setSummaryState] = useState({ loading: true, error: "" });
   const [subjects, setSubjects] = useState([]);
   const [subjectsState, setSubjectsState] = useState({ loading: true, error: "" });
-  const [diagnosticForm, setDiagnosticForm] = useState({ subject_id: "" });
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
+  const [diagnosticForm, setDiagnosticForm] = useState({ subject_id: "", exam_id: "" });
   const [diagnosticState, setDiagnosticState] = useState({ loading: false, error: "", success: "" });
   const [topicSearch, setTopicSearch] = useState("");
 
   useEffect(() => {
     let isMounted = true;
+    setIsInitialLoadComplete(false);
 
     async function loadSummary() {
       setSummaryState({ loading: true, error: "" });
@@ -63,8 +66,10 @@ function StudentDashboardPage() {
         const data = await apiRequest("/api/diagnostic/subjects", { token });
         if (isMounted) {
           setSubjects(data);
+          const firstSubject = data[0];
           setDiagnosticForm((current) => ({
-            subject_id: current.subject_id || data[0]?.id || "",
+            subject_id: current.subject_id || firstSubject?.id || "",
+            exam_id: current.exam_id || firstSubject?.exams?.[0]?.id || "",
           }));
           setSubjectsState({ loading: false, error: "" });
         }
@@ -75,8 +80,14 @@ function StudentDashboardPage() {
       }
     }
 
-    loadSummary();
-    loadSubjects();
+    async function loadDashboard() {
+      await Promise.allSettled([loadSummary(), loadSubjects()]);
+      if (isMounted) {
+        setIsInitialLoadComplete(true);
+      }
+    }
+
+    loadDashboard();
     return () => {
       isMounted = false;
     };
@@ -85,6 +96,7 @@ function StudentDashboardPage() {
   const latest = summary?.latest_learning_health;
   const weakConcepts = summary?.weak_concepts ?? [];
   const recentAttempts = summary?.recent_attempts ?? [];
+  const welcomeName = summary?.full_name || "Student";
   const filteredWeakConcepts = weakConcepts.filter((concept) => {
     const query = topicSearch.trim().toLowerCase();
     if (!query) {
@@ -99,6 +111,12 @@ function StudentDashboardPage() {
     value: subject.id,
     label: `${subject.name} (${subject.question_count} questions)`,
   }));
+  const selectedSubject = subjects.find((subject) => subject.id === diagnosticForm.subject_id) ?? null;
+  const examOptions = (selectedSubject?.exams ?? []).map((exam) => ({
+    value: exam.id,
+    label: exam.name,
+  }));
+  const isDashboardLoading = !isInitialLoadComplete;
 
   const handleDiagnosticSubmit = async () => {
     setDiagnosticState({ loading: true, error: "", success: "" });
@@ -119,13 +137,17 @@ function StudentDashboardPage() {
     }
   };
 
+  if (isDashboardLoading) {
+    return <AppRouteLoader label="Loading dashboard" />;
+  }
+
   return (
     <div className="student-dashboard-page student-dashboard-antd">
       <Card className="student-dashboard-welcome student-antd-card" variant="borderless">
         <div className="student-dashboard-welcome-row">
           <div>
             <Typography.Title level={3} className="student-dashboard-title">
-              Welcome back, {summary?.full_name || user?.email}.
+              Welcome back, {welcomeName}.
             </Typography.Title>
             <Typography.Paragraph className="student-dashboard-subtitle">
               Focus on your next step, track your learning health, and keep your recent progress in one place.
@@ -213,18 +235,33 @@ function StudentDashboardPage() {
             <div className="student-diagnostic-controls">
               <Select
                 value={diagnosticForm.subject_id || undefined}
-                onChange={(value) => setDiagnosticForm({ subject_id: value })}
+                onChange={(value) => {
+                  const nextSubject = subjects.find((subject) => subject.id === value) ?? null;
+                  setDiagnosticForm({
+                    subject_id: value,
+                    exam_id: nextSubject?.exams?.[0]?.id || "",
+                  });
+                }}
                 options={subjectOptions}
                 placeholder="Choose a subject"
-                className="student-select"
+                className="student-select student-select-subject"
                 size="large"
+              />
+              <Select
+                value={diagnosticForm.exam_id || undefined}
+                onChange={(value) => setDiagnosticForm((current) => ({ ...current, exam_id: value }))}
+                options={examOptions}
+                placeholder="Choose an exam"
+                className="student-select student-select-exam"
+                size="large"
+                disabled={!selectedSubject || examOptions.length === 0}
               />
               <Button
                 className="student-primary-button"
                 type="primary"
                 size="large"
                 loading={diagnosticState.loading}
-                disabled={subjects.length === 0}
+                disabled={subjects.length === 0 || !diagnosticForm.exam_id}
                 onClick={handleDiagnosticSubmit}
               >
                 Start diagnostic
@@ -233,10 +270,12 @@ function StudentDashboardPage() {
             <div className="student-dashboard-helptext">
               {subjects.length === 0 ? (
                 "No subjects are available yet."
+              ) : examOptions.length === 0 ? (
+                "This subject does not have exam-linked questions yet."
               ) : (
                 <>
                   <BulbOutlined className="student-help-icon" />
-                  <span>Start with the subject you find hardest.</span>
+                  <span>Choose the exam you are currently targeting before starting.</span>
                 </>
               )}
             </div>

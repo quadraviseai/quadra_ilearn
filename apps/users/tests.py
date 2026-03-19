@@ -5,6 +5,7 @@ from django.test import override_settings
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -57,6 +58,138 @@ class AuthApiTests(APITestCase):
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
 
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
+    @patch("apps.users.serializers.verify_google_id_token")
+    def test_google_login_returns_jwt_tokens_for_existing_user(self, mocked_verify_google_id_token):
+        user = get_user_model().objects.create_user(
+            email="google-user@example.com",
+            password="password123",
+            role="guardian",
+            auth_provider="google",
+            google_subject="google-sub-1",
+        )
+        mocked_verify_google_id_token.return_value = {
+            "email": user.email,
+            "email_verified": True,
+            "name": "Google Guardian",
+            "sub": "google-sub-1",
+        }
+
+        response = self.client.post(
+            "/api/auth/google",
+            {"credential": "valid-token", "intent": "login"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["email"], user.email)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
+    @patch("apps.users.serializers.verify_google_id_token")
+    def test_google_register_creates_student_profile(self, mocked_verify_google_id_token):
+        mocked_verify_google_id_token.return_value = {
+            "email": "google-student@example.com",
+            "email_verified": True,
+            "name": "Google Student",
+            "sub": "google-sub-2",
+        }
+
+        response = self.client.post(
+            "/api/auth/google",
+            {
+                "credential": "valid-token",
+                "intent": "register",
+                "role": "student",
+                "class_name": "9",
+                "board": "CBSE",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = get_user_model().objects.get(email="google-student@example.com")
+        self.assertTrue(user.is_verified)
+        self.assertFalse(user.has_usable_password())
+        self.assertEqual(user.auth_provider, "google")
+        self.assertEqual(user.google_subject, "google-sub-2")
+        profile = StudentProfile.objects.get(user=user)
+        self.assertEqual(profile.full_name, "Google Student")
+        self.assertEqual(profile.class_name, "9")
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
+    @patch("apps.users.serializers.verify_google_id_token")
+    def test_google_login_auto_registers_new_google_user(self, mocked_verify_google_id_token):
+        mocked_verify_google_id_token.return_value = {
+            "email": "new-google@example.com",
+            "email_verified": True,
+            "name": "New User",
+            "sub": "google-sub-3",
+        }
+
+        response = self.client.post(
+            "/api/auth/google",
+            {"credential": "valid-token", "intent": "login"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = get_user_model().objects.get(email="new-google@example.com")
+        self.assertEqual(user.auth_provider, "google")
+        self.assertEqual(user.role, "student")
+        profile = StudentProfile.objects.get(user=user)
+        self.assertEqual(profile.full_name, "New User")
+        self.assertEqual(profile.class_name, "")
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
+    @patch("apps.users.serializers.verify_google_id_token")
+    def test_google_login_rejects_password_only_account(self, mocked_verify_google_id_token):
+        user = get_user_model().objects.create_user(
+            email="password-user@example.com",
+            password="password123",
+            role="guardian",
+        )
+        mocked_verify_google_id_token.return_value = {
+            "email": user.email,
+            "email_verified": True,
+            "name": "Password User",
+            "sub": "google-sub-4",
+        }
+
+        response = self.client.post(
+            "/api/auth/google",
+            {"credential": "valid-token", "intent": "login"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Use email/password login instead", str(response.data["detail"]))
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
+    @patch("apps.users.serializers.verify_google_id_token")
+    def test_google_register_rejects_existing_password_only_account(self, mocked_verify_google_id_token):
+        get_user_model().objects.create_user(
+            email="existing-user@example.com",
+            password="password123",
+            role="student",
+        )
+        mocked_verify_google_id_token.return_value = {
+            "email": "existing-user@example.com",
+            "email_verified": True,
+            "name": "Existing User",
+            "sub": "google-sub-5",
+        }
+
+        response = self.client.post(
+            "/api/auth/google",
+            {"credential": "valid-token", "intent": "register", "role": "student", "class_name": "10"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Use email/password login instead", str(response.data["detail"]))
+
     def test_forgot_password_sends_reset_email(self):
         user = get_user_model().objects.create_user(
             email="supporter@example.com",
@@ -97,3 +230,22 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         user.refresh_from_db()
         self.assertTrue(user.check_password("newpassword123"))
+
+    def test_me_returns_current_user(self):
+        user = get_user_model().objects.create_user(
+            email="me@example.com",
+            password="password123",
+            role="student",
+        )
+
+        login_response = self.client.post(
+            "/api/auth/login",
+            {"email": user.email, "password": "password123"},
+            format="json",
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}")
+
+        response = self.client.get("/api/auth/me")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["email"], user.email)

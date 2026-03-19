@@ -1,4 +1,5 @@
 export const AUTH_STORAGE_KEY = "quadrailearn-auth";
+export const AUTH_SESSION_EVENT = "quadrailearn-auth-session-changed";
 
 export function readStoredSession() {
   const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
@@ -20,4 +21,5 @@ export function writeStoredSession(session) {
   } else {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
   }
+  window.dispatchEvent(new CustomEvent(AUTH_SESSION_EVENT, { detail: session }));
 }

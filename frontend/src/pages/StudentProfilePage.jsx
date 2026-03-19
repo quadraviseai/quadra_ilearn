@@ -40,6 +40,7 @@ function formatSuggestionState(data) {
 function StudentProfilePage() {
   const { token } = useAuth();
   const [form, setForm] = useState(emptyProfile);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [state, setState] = useState({ loading: true, saving: false, error: "", success: "" });
   const [examSuggestion, setExamSuggestion] = useState({
     loading: false,
@@ -88,10 +89,47 @@ function StudentProfilePage() {
   }, [token]);
 
   const updateField = (name, value) => {
+    setFieldErrors((current) => ({ ...current, [name]: "" }));
     setForm((current) => ({ ...current, [name]: value }));
   };
 
+  const updatePhone = (value) => {
+    updateField("phone", value.replace(/\D/g, "").slice(0, 10));
+  };
+
+  const updateClassName = (value) => {
+    updateField("class_name", value.replace(/[^\d]/g, "").slice(0, 2));
+  };
+
+  const updateBoard = (value) => {
+    updateField("board", value.toUpperCase());
+  };
+
+  const validateProfileForm = () => {
+    const nextErrors = {};
+
+    if (form.phone && !/^\d{10}$/.test(form.phone.trim())) {
+      nextErrors.phone = "Phone number must be exactly 10 digits.";
+    }
+
+    if (form.class_name && !/^\d+$/.test(form.class_name.trim())) {
+      nextErrors.class_name = "Class must be a whole number without decimals.";
+    } else if (form.class_name) {
+      const classNumber = Number(form.class_name);
+      if (classNumber < 10 || classNumber > 12) {
+        nextErrors.class_name = "Class must be between 10 and 12.";
+      }
+    }
+
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
   const handleFetchPrimaryExamSuggestion = async () => {
+    if (!validateProfileForm()) {
+      return;
+    }
+
     if (!form.class_name.trim()) {
       setExamSuggestion({
         loading: false,
@@ -125,6 +163,9 @@ function StudentProfilePage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!validateProfileForm()) {
+      return;
+    }
     setState((current) => ({ ...current, saving: true, error: "", success: "" }));
     try {
       const payload = {
@@ -187,8 +228,11 @@ function StudentProfilePage() {
                 <Input
                   value={form.phone}
                   size="large"
-                  onChange={(event) => updateField("phone", event.target.value)}
+                  maxLength={10}
+                  status={fieldErrors.phone ? "error" : ""}
+                  onChange={(event) => updatePhone(event.target.value)}
                 />
+                {fieldErrors.phone ? <div className="message message-error">{fieldErrors.phone}</div> : null}
               </Col>
               <Col xs={24} md={12}>
                 <label className="student-profile-label">Full name</label>
@@ -203,8 +247,10 @@ function StudentProfilePage() {
                 <Input
                   value={form.class_name}
                   size="large"
-                  onChange={(event) => updateField("class_name", event.target.value)}
+                  status={fieldErrors.class_name ? "error" : ""}
+                  onChange={(event) => updateClassName(event.target.value)}
                 />
+                {fieldErrors.class_name ? <div className="message message-error">{fieldErrors.class_name}</div> : null}
               </Col>
               <Col xs={24} md={12}>
                 <label className="student-profile-label">Date of birth</label>
@@ -221,7 +267,7 @@ function StudentProfilePage() {
                 <Input
                   value={form.board}
                   size="large"
-                  onChange={(event) => updateField("board", event.target.value)}
+                  onChange={(event) => updateBoard(event.target.value)}
                 />
               </Col>
               <Col xs={24}>

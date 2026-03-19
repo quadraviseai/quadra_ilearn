@@ -3,6 +3,16 @@ import { readStoredSession, writeStoredSession } from "./authStorage.js";
 const JSON_HEADERS = {
   "Content-Type": "application/json",
 };
+const API_BASE_URL = import.meta.env.DEV
+  ? ""
+  : (import.meta.env.VITE_API_BASE_URL || "https://quadrailearn.quadravise.com").replace(/\/$/, "");
+
+function resolveUrl(path) {
+  if (path.startsWith("http")) {
+    return path;
+  }
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 async function parseResponse(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -32,7 +42,7 @@ async function refreshAccessToken(session) {
     return null;
   }
 
-  const response = await fetch("/api/auth/refresh", {
+  const response = await fetch(resolveUrl("/api/auth/refresh"), {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify({ refresh: session.refresh }),
@@ -56,7 +66,7 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
     headers.Authorization = `Bearer ${activeToken}`;
   }
 
-  let response = await fetch(path, {
+  let response = await fetch(resolveUrl(path), {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -65,7 +75,7 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
   if (response.status === 401 && (activeToken || storedSession?.refresh)) {
     const refreshedToken = await refreshAccessToken(readStoredSession() || storedSession);
     if (refreshedToken) {
-      response = await fetch(path, {
+      response = await fetch(resolveUrl(path), {
         method,
         headers: {
           ...headers,
@@ -74,6 +84,10 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
         body: body ? JSON.stringify(body) : undefined,
       });
     }
+  }
+
+  if (response.status === 401 && (storedSession?.access || storedSession?.refresh)) {
+    writeStoredSession(null);
   }
 
   return parseResponse(response);

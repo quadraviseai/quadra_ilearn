@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Form, Input, Modal, Select, Space, Switch, Table, Tag, message } from "antd";
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from "antd";
 
 import { apiRequest } from "../lib/api.js";
 import { useAuth } from "../state/AuthContext.jsx";
@@ -11,7 +11,7 @@ const roleOptions = [
 ];
 
 function AdminUsersPage() {
-  const { token } = useAuth();
+  const { token, user: currentUser } = useAuth();
   const [messageApi, contextHolder] = message.useMessage();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,6 +114,22 @@ function AdminUsersPage() {
     }
   };
 
+  const handleDelete = async (user) => {
+    try {
+      await apiRequest(`/api/admin/users/${user.id}`, {
+        method: "DELETE",
+        token,
+      });
+      messageApi.success("User deleted.");
+      if (editingUser?.id === user.id) {
+        setEditingUser(null);
+      }
+      loadUsers();
+    } catch (requestError) {
+      messageApi.error(requestError.message);
+    }
+  };
+
   const columns = [
     {
       title: "Name",
@@ -145,9 +161,23 @@ function AdminUsersPage() {
       title: "Actions",
       key: "actions",
       render: (_, user) => (
-        <Button type="link" onClick={() => openEdit(user)}>
-          Edit
-        </Button>
+        <Space size="small">
+          <Button type="link" onClick={() => openEdit(user)}>
+            Edit
+          </Button>
+          <Popconfirm
+            title="Delete user?"
+            description="This permanently removes the user and related profile data."
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(user)}
+            disabled={currentUser?.id === user.id}
+          >
+            <Button type="link" danger disabled={currentUser?.id === user.id}>
+              Delete
+            </Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];

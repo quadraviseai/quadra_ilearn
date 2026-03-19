@@ -8,7 +8,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.users.serializers import LoginSerializer, RegisterSerializer, UserSummarySerializer
+from apps.users.serializers import GoogleAuthSerializer, LoginSerializer, RegisterSerializer, UserSummarySerializer
 
 User = get_user_model()
 
@@ -36,6 +36,20 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         return Response(serializer.save(), status=status.HTTP_200_OK)
+
+
+class GoogleAuthView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = GoogleAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.save(), status=status.HTTP_200_OK)
+
+
+class CurrentUserView(APIView):
+    def get(self, request):
+        return Response(UserSummarySerializer(request.user).data, status=status.HTTP_200_OK)
 
 
 class ForgotPasswordView(APIView):

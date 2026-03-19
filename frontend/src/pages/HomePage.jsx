@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
+
 import heroLearningImage from "../assets/learning_01.png";
 import landingPageBanner from "../assets/landingpagebanner.png";
 import quadraviseLogo from "../assets/quadravise_logo.png";
@@ -36,288 +37,236 @@ function HomePage() {
               Login
             </Link>
             <Link className="button button-primary header-cta" to="/register">
-              Start Free Diagnostic
+              Start Free Test
             </Link>
           </div>
         </header>
 
-        <section
-          className="hero-banner"
-          id="home"
-          style={{ backgroundImage: `url(${heroLearningImage})` }}
-        >
+        <section className="hero-banner" style={{ backgroundImage: `url(${heroLearningImage})` }}>
           <div className="hero-banner-overlay">
             <div className="hero-banner-content">
               <h1 className="hero-banner-title">
-                Improve Your Learning
-                <span>For Every Exam That Matters</span>
+                Practice The Right Test
+                <span>Then Fix What Went Wrong</span>
               </h1>
               <p className="hero-banner-copy">
-                QuadraILearn helps students identify weak concepts, track study consistency, and
-                improve exam readiness with clear insights.
+                QuadraILearn is now focused on a direct student flow: register, select exam and
+                subject, take a 30-question mock test, review weak topics, learn, and retest.
               </p>
               <div className="hero-actions hero-banner-actions">
                 <Link className="button button-primary" to="/register">
-                  Start Free Diagnostic
+                  Start Free Test
                 </Link>
                 <Link className="button button-secondary button-secondary-hero" to="/login">
                   Student Login
                 </Link>
               </div>
-              <p className="hero-exam-line">For students preparing for: CBSE • ICSE • JEE • NEET</p>
+              <p className="hero-exam-line">For students preparing for: CBSE • JEE • NEET</p>
             </div>
           </div>
         </section>
 
-        <section className="landing-section full-viewport-section split-viewport-section" id="help">
+        <section className="landing-section full-viewport-section split-viewport-section">
           <div className="section-head">
-            <h2>How QuadraILearn helps students</h2>
+            <h2>How the new student flow works</h2>
           </div>
           <div className="help-grid">
             <article className="panel simple-card">
-              <h3>Find weak concepts</h3>
-              <p>Understand which topics you are struggling with.</p>
+              <h3>Select exam and subject</h3>
+              <p>Start from the exact exam and subject you want to practice.</p>
             </article>
             <article className="panel simple-card">
-              <h3>Track learning progress</h3>
-              <p>See how your understanding improves over time.</p>
+              <h3>Take a 30-question mock test</h3>
+              <p>Answer randomized questions with progress saved instantly.</p>
             </article>
             <article className="panel simple-card">
-              <h3>Focus on the right topics</h3>
-              <p>Study what matters most instead of guessing.</p>
+              <h3>Learn from weak topics</h3>
+              <p>Review ranked weak areas, then retest with free or paid access.</p>
             </article>
           </div>
         </section>
 
         <section
           className="landing-section alt-band family-band full-viewport-section split-viewport-section"
-          id="families"
           style={{ backgroundImage: `url(${heroLearningImage})` }}
         >
           <div className="section-head">
-            <h2>Helpful for both students and parents</h2>
+            <h2>Built around the full mock-test loop</h2>
           </div>
           <div className="family-grid">
             <article className="panel family-card">
-              <h3>For Students</h3>
+              <h3>Before the test</h3>
               <ul className="journey-list">
-                <li>Identify weak topics</li>
-                <li>Improve concept understanding</li>
-                <li>Track study consistency</li>
-                <li>Prepare better for exams</li>
+                <li>Create your student account</li>
+                <li>Log in securely</li>
+                <li>Select exam</li>
+                <li>Select subject</li>
               </ul>
             </article>
             <article className="panel family-card family-card-accent">
-              <h3>For Parents</h3>
+              <h3>After the test</h3>
               <ul className="journey-list">
-                <li>See student progress clearly</li>
-                <li>Understand weak areas</li>
-                <li>Track learning consistency</li>
-                <li>Support study improvement</li>
+                <li>Open the report</li>
+                <li>Review weak topics</li>
+                <li>Learn topic-specific guidance</li>
+                <li>Retest with free or paid access</li>
               </ul>
             </article>
           </div>
         </section>
 
-        <section className="landing-section" id="dashboard">
+        <section className="landing-section">
           <div className="section-head dashboard-section-head">
             <div>
-              <h2>A clearer view of student progress</h2>
+              <h2>A clearer view of every attempt</h2>
             </div>
-            <p>
-              One dashboard for weak concepts, learning health, and consistency signals.
-            </p>
+            <p>One flow for eligibility, attempt, report, weak-topic learning, and retest.</p>
           </div>
           <article className="dashboard-unified-card">
             <div className="dashboard-mock-top">
               <div>
-                <h3>Your learning dashboard</h3>
+                <h3>Your mock-test dashboard</h3>
               </div>
             </div>
             <div className="dashboard-preview-grid">
               <div className="mock-metric">
-                <span>Weak concepts</span>
-                <strong>6 topics</strong>
-                <small>Algebra, force systems, organic basics</small>
+                <span>Eligibility</span>
+                <strong>Free first test</strong>
+                <small>Then Rs. 10 to unlock the next retest</small>
               </div>
               <div className="mock-metric">
-                <span>Learning health</span>
-                <strong>78%</strong>
-                <small>Consistency and topic coverage</small>
+                <span>Report</span>
+                <strong>Correct / Wrong / Unanswered</strong>
+                <small>See score, percentage, and ranked weak topics</small>
               </div>
               <div className="mock-metric mock-wide">
-                <span>Progress trends</span>
+                <span>Learning flow</span>
                 <div className="trend-stat-row">
                   <div className="trend-stat">
-                    <strong>+12%</strong>
-                    <small>Consistency</small>
+                    <strong>01</strong>
+                    <small>Take test</small>
                   </div>
                   <div className="trend-stat">
-                    <strong>+8%</strong>
-                    <small>Coverage</small>
+                    <strong>02</strong>
+                    <small>See report</small>
                   </div>
                   <div className="trend-stat">
-                    <strong>3 weeks</strong>
-                    <small>Improving</small>
+                    <strong>03</strong>
+                    <small>Learn and retest</small>
                   </div>
                 </div>
-                <small>Track study consistency across sessions</small>
+                <small>Move from attempt to improvement without leaving the app flow</small>
               </div>
             </div>
             <p className="dashboard-unified-copy">
-              QuadraILearn brings the most important learning signals into one simple view, so
-              students and parents can understand where improvement is needed.
+              QuadraILearn now centers the student experience around one practical cycle: test,
+              report, weak-topic learning, and retest.
             </p>
             <div className="dashboard-inline-steps">
               <div className="dashboard-inline-step">
                 <span className="preview-feature-icon">01</span>
                 <div>
-                  <strong>Weak concepts</strong>
-                  <small>See exactly which topics need more attention.</small>
+                  <strong>Exam and subject</strong>
+                  <small>Start from the exact practice context you need.</small>
                 </div>
               </div>
               <div className="dashboard-inline-step">
                 <span className="preview-feature-icon">02</span>
                 <div>
-                  <strong>Learning health</strong>
-                  <small>Track the overall strength of current learning habits.</small>
+                  <strong>Mock test engine</strong>
+                  <small>Take a 30-question test with instant local save.</small>
                 </div>
               </div>
               <div className="dashboard-inline-step">
                 <span className="preview-feature-icon">03</span>
                 <div>
-                  <strong>Progress trends</strong>
-                  <small>Understand whether performance is moving up over time.</small>
+                  <strong>Performance report</strong>
+                  <small>Measure score, percentage, and weak-topic rank.</small>
                 </div>
               </div>
               <div className="dashboard-inline-step">
                 <span className="preview-feature-icon">04</span>
                 <div>
-                  <strong>Study consistency</strong>
-                  <small>Monitor how regularly the student is staying on track.</small>
+                  <strong>Learn and retest</strong>
+                  <small>Study what failed, then unlock the next test.</small>
                 </div>
               </div>
             </div>
           </article>
         </section>
 
-        <section className="landing-section" id="how-it-works">
-          <div className="section-head">
-            <h2>How it works</h2>
-          </div>
-          <div className="process-grid">
-            <article className="process-card">
-              <span className="process-step-label">01</span>
-              <div className="process-icon-tile" aria-hidden="true">
-                <svg viewBox="0 0 24 24" className="process-icon">
-                  <circle cx="11" cy="11" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
-                  <path d="M16 16L21 21" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <h3>Take a diagnostic test</h3>
-              <p>Start with a simple diagnostic to identify weak concepts and readiness gaps.</p>
-            </article>
-            <article className="process-card">
-              <span className="process-step-label">02</span>
-              <div className="process-icon-tile" aria-hidden="true">
-                <svg viewBox="0 0 24 24" className="process-icon">
-                  <path d="M4 18H20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M6 16V9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M12 16V6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M18 16V11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <h3>See learning health</h3>
-              <p>Understand concept weakness, consistency, and overall learning health clearly.</p>
-            </article>
-            <article className="process-card">
-              <span className="process-step-label">03</span>
-              <div className="process-icon-tile" aria-hidden="true">
-                <svg viewBox="0 0 24 24" className="process-icon">
-                  <path d="M5 12H19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M13 6L19 12L13 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <h3>Follow focused practice</h3>
-              <p>Improve study outcomes with clearer next steps instead of random revision.</p>
-            </article>
-          </div>
-        </section>
-
-        <section className="landing-section" id="why">
+        <section className="landing-section">
           <div className="section-head">
             <h2>Why students use QuadraILearn</h2>
           </div>
           <div className="preview-style-grid">
             <article className="preview-style-card">
-              <h3>Concept clarity</h3>
-              <p>Understand topics deeply, not just memorize answers.</p>
+              <h3>Exam-specific practice</h3>
+              <p>Stay inside the exam and subject you actually want to prepare for.</p>
               <div className="preview-style-tags">
-                <span className="tag">Weak areas</span>
-                <span className="tag">Topic view</span>
-                <span className="tag">Understanding</span>
+                <span className="tag">Exam choice</span>
+                <span className="tag">Subject mapping</span>
+                <span className="tag">Start gate</span>
               </div>
               <div className="preview-style-outcome preview-style-outcome-blue">
                 <span>Outcome</span>
-                <strong>Better concept understanding</strong>
+                <strong>Cleaner start to every practice session</strong>
               </div>
             </article>
             <article className="preview-style-card">
-              <h3>Progress tracking</h3>
-              <p>Track learning improvement week by week.</p>
+              <h3>Clear reporting</h3>
+              <p>See total, correct, wrong, unanswered, score, and percentage.</p>
               <div className="preview-style-tags">
-                <span className="tag">Weekly trends</span>
-                <span className="tag">Signals</span>
-                <span className="tag">Consistency</span>
+                <span className="tag">Score</span>
+                <span className="tag">Percentage</span>
+                <span className="tag">Weak topics</span>
               </div>
               <div className="preview-style-outcome preview-style-outcome-orange">
                 <span>Outcome</span>
-                <strong>Visible learning movement</strong>
+                <strong>Faster understanding of performance gaps</strong>
               </div>
             </article>
             <article className="preview-style-card">
-              <h3>Parent visibility</h3>
-              <p>Parents can monitor student progress easily.</p>
+              <h3>Focused learning</h3>
+              <p>Study weak topics with direct guidance instead of random revision.</p>
               <div className="preview-style-tags">
-                <span className="tag">Guardian view</span>
-                <span className="tag">Progress</span>
-                <span className="tag">Support</span>
+                <span className="tag">Topic rank</span>
+                <span className="tag">Learn</span>
+                <span className="tag">Retry</span>
               </div>
               <div className="preview-style-outcome preview-style-outcome-green">
                 <span>Outcome</span>
-                <strong>Clearer parent visibility</strong>
+                <strong>More useful revision after every attempt</strong>
               </div>
             </article>
             <article className="preview-style-card">
-              <h3>Exam readiness</h3>
-              <p>Improve preparation for school and competitive exams.</p>
+              <h3>Retest access</h3>
+              <p>First attempt is free. The next one unlocks through a simple payment step.</p>
               <div className="preview-style-tags">
-                <span className="tag">CBSE</span>
-                <span className="tag">JEE</span>
-                <span className="tag">NEET</span>
+                <span className="tag">Free attempt</span>
+                <span className="tag">Rs. 10</span>
+                <span className="tag">Entitlement</span>
               </div>
               <div className="preview-style-outcome preview-style-outcome-purple">
                 <span>Outcome</span>
-                <strong>Stronger exam preparation</strong>
+                <strong>Simple retest progression</strong>
               </div>
             </article>
           </div>
         </section>
 
         <section className="landing-section">
-          <div
-            className="panel final-cta simple-final-cta final-cta-banner"
-            style={{ backgroundImage: `url(${landingPageBanner})` }}
-          >
+          <div className="panel final-cta simple-final-cta final-cta-banner" style={{ backgroundImage: `url(${landingPageBanner})` }}>
             <div>
-              <h2>Start improving your learning today</h2>
+              <h2>Start the new mock-test journey today</h2>
               <p>
-                Run a quick diagnostic and see where your learning needs improvement.
+                Create a student account, take the first free test, and use the report to improve
+                the next attempt.
               </p>
             </div>
             <div className="hero-actions">
               <Link className="button button-primary" to="/register">
-                Start Free Diagnostic
+                Start Free Test
               </Link>
             </div>
           </div>
@@ -332,15 +281,12 @@ function HomePage() {
               <span>QuadraILearn</span>
             </div>
             <p className="footer-note">A product by Quadravise</p>
-            <p>
-              Modern software designed to help students understand and improve learning health.
-            </p>
+            <p>Modern software designed to help students test, learn from mistakes, and retest.</p>
           </div>
           <div>
             <h4>Links</h4>
             <div className="footer-column-links">
               <Link to="/login">Student Login</Link>
-              <Link to="/login">Parent Login</Link>
               <a href="#">Privacy Policy</a>
               <a href="#">Contact</a>
             </div>
