@@ -36,6 +36,22 @@ Initial Django backend scaffold for QuadraILearn using:
 5. Start the server:
    - `python manage.py runserver`
 
+## Server deploy
+- The server deploy script is `scripts/deploy_server.sh`.
+- It is intended to run on the Linux host from `/var/www/quadrailearn/app`.
+- Default behavior:
+  - fetch `origin/main`
+  - hard reset the app repo to the remote branch
+  - clean untracked files while preserving `.env`, `.venv`, and `staticfiles`
+  - run `pip install -r requirements.txt`
+  - run Django migrations and `collectstatic`
+  - rebuild `frontend/`
+  - sync `frontend/dist/` into `/var/www/quadrailearn/site`
+  - restart `quadrailearn.service`
+- Usage:
+  - `bash scripts/deploy_server.sh`
+  - or `bash scripts/deploy_server.sh main`
+
 ## Current limitation
 - The local `.env` defaults point to database `quadrailearn`, but the password is intentionally blank until you set the actual local PostgreSQL credentials.
 - `DB_CONNECT_TIMEOUT=5` keeps failed local connections from hanging for a long time.
