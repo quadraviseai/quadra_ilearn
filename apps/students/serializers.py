@@ -3,7 +3,14 @@ from rest_framework import serializers
 from apps.diagnostics.models import ConceptMastery, TestAttempt
 from apps.learning_health.serializers import LearningHealthSnapshotSerializer
 from apps.students.models import StudentProfile
-from apps.users.services import TokenError, apply_referral_bonus, get_token_settings, serialize_token_settings
+from apps.users.models import TokenTransaction
+from apps.users.services import (
+    TokenError,
+    apply_referral_bonus,
+    get_token_settings,
+    get_token_top_up_packs,
+    serialize_token_settings,
+)
 
 
 class WeakConceptSerializer(serializers.ModelSerializer):
@@ -95,6 +102,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     profile_image_url = serializers.SerializerMethodField()
     profile_image_upload = serializers.FileField(write_only=True, required=False, allow_null=True)
     token_settings = serializers.SerializerMethodField()
+    token_top_up_packs = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
@@ -116,6 +124,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             "referred_by_email",
             "referral_code_input",
             "token_settings",
+            "token_top_up_packs",
             "ai_exam_suggestions",
             "ai_exam_suggestions_generated_at",
             "timezone",
@@ -131,6 +140,9 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             url = obj.profile_image.url
             return request.build_absolute_uri(url) if request else url
         return obj.profile_image_url
+
+    def get_token_top_up_packs(self, _obj):
+        return get_token_top_up_packs()
 
     def validate_referral_code_input(self, value):
         return str(value or "").strip().upper()
@@ -166,3 +178,107 @@ class PrimaryExamSuggestionRequestSerializer(serializers.Serializer):
     date_of_birth = serializers.DateField(required=False, allow_null=True)
     board = serializers.CharField(max_length=100, required=False, allow_blank=True)
     school_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+class TokenTopUpPurchaseRequestSerializer(serializers.Serializer):
+    pack_id = serializers.CharField(max_length=30)
+    provider = serializers.CharField(required=False, allow_blank=True, default="mobile-demo")
+    provider_reference = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class StudentTokenTransactionSerializer(serializers.ModelSerializer):
+    transaction_type_label = serializers.CharField(source="get_transaction_type_display", read_only=True)
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
+
+    class Meta:
+        model = TokenTransaction
+        fields = [
+            "id",
+            "transaction_type",
+            "transaction_type_label",
+            "amount",
+            "balance_after",
+            "note",
+            "metadata",
+            "created_by_email",
+            "created_at",
+        ]
+
+
+class StudentPriceTransactionSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    price_transaction_type = serializers.CharField()
+    title = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=8, decimal_places=2)
+    status = serializers.CharField()
+    provider = serializers.CharField(allow_blank=True)
+    provider_reference = serializers.CharField(allow_blank=True)
+    metadata = serializers.JSONField()
+    created_at = serializers.DateTimeField()
+
+
+class StudentExamTransactionSerializer(serializers.ModelSerializer):
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
+
+    class Meta:
+        model = TestAttempt
+        fields = [
+            "id",
+            "exam_name",
+            "subject_name",
+            "status",
+            "access_mode",
+            "score_percent",
+            "total_questions",
+            "correct_answers",
+            "wrong_answers",
+            "unanswered_answers",
+            "started_at",
+            "submitted_at",
+        ]
+
+
+class StudentAuditLogSerializer(serializers.Serializer):
+    token_transactions = StudentTokenTransactionSerializer(many=True)
+    price_transactions = StudentPriceTransactionSerializer(many=True)
+    exam_transactions = StudentExamTransactionSerializer(many=True)
+
+
+def build_price_transaction_rows(topups, payments):
+    rows = []
+    for purchase in topups:
+        rows.append(
+            {
+                "id": purchase.id,
+                "price_transaction_type": "token_topup",
+                "title": f"{purchase.token_amount} token pack",
+                "amount": purchase.amount,
+                "status": purchase.status,
+                "provider": purchase.provider,
+                "provider_reference": purchase.provider_reference,
+                "metadata": purchase.metadata,
+                "created_at": purchase.created_at,
+            }
+        )
+
+    for payment in payments:
+        rows.append(
+            {
+                "id": payment.id,
+                "price_transaction_type": "exam_unlock",
+                "title": f"{payment.exam.name} · {payment.subject.name}",
+                "amount": payment.amount,
+                "status": payment.status,
+                "provider": payment.provider,
+                "provider_reference": payment.provider_reference,
+                "metadata": {
+                    "exam_id": str(payment.exam_id),
+                    "subject_id": str(payment.subject_id),
+                },
+                "created_at": payment.created_at,
+            }
+        )
+
+    rows.sort(key=lambda item: item["created_at"], reverse=True)
+    return rows

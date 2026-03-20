@@ -94,8 +94,8 @@ export default function StudentReportScreen() {
 
   if (!state.report && !state.loading) {
     return (
-      <Screen refreshControl={load}>
-        <AppHeader title="Result" subtitle="Your submitted mock test result will appear here." />
+      <Screen refreshControl={load} topPadding={0}>
+        <AppHeader title="Result" subtitle="Your submitted mock test result will appear here." fullBleed />
         {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
         <SectionCard title="No result yet" subtitle="Finish a mock test first to generate the result page.">
           <Pressable style={styles.primaryButton} onPress={() => router.replace("/(student)/diagnostics")}>
@@ -107,8 +107,8 @@ export default function StudentReportScreen() {
   }
 
   return (
-    <Screen loading={state.loading} refreshControl={load}>
-      <AppHeader title="Result" subtitle="Score, weak concepts, AI support, and tokens from the latest submitted exam." />
+    <Screen loading={state.loading} refreshControl={load} topPadding={0}>
+      <AppHeader title="Result" subtitle="Score, weak concepts, AI support, and tokens from the latest submitted exam." fullBleed />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
       <View style={styles.heroBar}>

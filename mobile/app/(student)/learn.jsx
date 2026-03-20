@@ -80,8 +80,8 @@ export default function StudentLearnScreen() {
 
   if (!state.report && !state.loading) {
     return (
-      <Screen refreshControl={load}>
-        <AppHeader title="Learn" subtitle="Weak-topic guidance appears here after the first submitted report." />
+      <Screen refreshControl={load} topPadding={0}>
+        <AppHeader title="Learn" subtitle="Weak-topic guidance appears here after the first submitted report." fullBleed />
         {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
         <SectionCard title="No learning content yet" subtitle="Finish an exam and open the report first.">
           <Pressable style={styles.primaryButton} onPress={() => router.push("/(student)/diagnostics")}>
@@ -93,8 +93,8 @@ export default function StudentLearnScreen() {
   }
 
   return (
-    <Screen loading={state.loading} refreshControl={load}>
-      <AppHeader title="Weak-topic coach" subtitle="Teacher-style explanations and next-step practice from the latest report." />
+    <Screen loading={state.loading} refreshControl={load} topPadding={0}>
+      <AppHeader title="Weak-topic coach" subtitle="Teacher-style explanations and next-step practice from the latest report." fullBleed />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
       {activeCard ? (

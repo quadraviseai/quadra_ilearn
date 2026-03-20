@@ -111,6 +111,7 @@ class TokenTransaction(models.Model):
         ADMIN_ADJUSTMENT = "admin_adjustment", "Admin Adjustment"
         WEAK_TOPIC_UNLOCK = "weak_topic_unlock", "Weak Topic Unlock"
         TIMER_RESET = "timer_reset", "Timer Reset"
+        TOKEN_TOPUP = "token_topup", "Token Top-up"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey("User", on_delete=models.CASCADE, related_name="token_transactions")
@@ -127,3 +128,26 @@ class TokenTransaction(models.Model):
 
     def __str__(self):
         return f"{self.user.email}: {self.amount} ({self.transaction_type})"
+
+
+class TokenTopUpPurchase(models.Model):
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+        PENDING = "pending", "Pending"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey("User", on_delete=models.CASCADE, related_name="token_topup_purchases")
+    token_amount = models.PositiveIntegerField()
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCESS)
+    provider = models.CharField(max_length=50, blank=True, default="manual")
+    provider_reference = models.CharField(max_length=120, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email}: {self.token_amount} tokens"

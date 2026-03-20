@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import * as Google from "expo-auth-session/providers/google";
-import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
-import { colors, gradients, radii, shadows, spacing } from "../../src/theme";
+import { colors, radii, shadows, spacing } from "../../src/theme";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -120,251 +119,205 @@ export default function LoginScreen() {
 
   return (
     <Screen>
-      <LinearGradient colors={gradients.authHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-        <View style={styles.heroMarkRow}>
-          <View style={styles.heroMark}>
-            <Image source={require("../../assets/quadravise-logo.png")} style={styles.heroMarkImage} resizeMode="contain" />
+      <View style={styles.pageShell}>
+        <View style={styles.authCard}>
+          <View style={styles.logoRow}>
+            <Image source={require("../../assets/quadravise-logo.png")} style={styles.logoImage} resizeMode="contain" />
+            <Text style={styles.logoWordmark}>QuadraILearn</Text>
           </View>
-          <View style={styles.heroMarkCopy}>
-            <Text style={styles.eyebrow}>QuadraILearn Mobile</Text>
-            <Text style={styles.heroKicker}>Live student learning workspace</Text>
-          </View>
-        </View>
-        <Text style={styles.title}>Modern learning insight for every exam that matters.</Text>
-        <Text style={styles.copy}>
-          Sign in to exams, reports, weak-topic learning, and profile tools with the same account used on the web app.
-        </Text>
-        <View style={styles.heroStatRow}>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>Exam-ready</Text>
-            <Text style={styles.heroStatLabel}>JEE, NEET, school boards</Text>
-          </View>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>Live sync</Text>
-            <Text style={styles.heroStatLabel}>Mobile and web stay aligned</Text>
-          </View>
-        </View>
-      </LinearGradient>
 
-      <View style={styles.formCard}>
-        <Text style={styles.sectionTitle}>Welcome back</Text>
-        <Text style={styles.sectionCopy}>Use email/password or Google to continue into your dashboard.</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.slateSoft}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={colors.slateSoft}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable style={[styles.button, loading ? styles.buttonDisabled : null]} onPress={handleLogin} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? "Signing in..." : "Sign in"}</Text>
-        </Pressable>
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
+          <View style={styles.headerBlock}>
+            <Text style={styles.title}>Login to your Account</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={colors.slateSoft}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={colors.slateSoft}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Pressable style={[styles.button, loading ? styles.buttonDisabled : null]} onPress={handleLogin} disabled={loading}>
+              <Text style={styles.buttonText}>{loading ? "Signing in..." : "Sign in"}</Text>
+            </Pressable>
+
+            <Text style={styles.socialLabel}>Or continue with Google</Text>
+
+            <View style={styles.socialRow}>
+              <Pressable
+                style={[styles.googleOnlyButton, (googleLoading || loading) ? styles.buttonDisabled : null]}
+                onPress={handleGoogleLogin}
+                disabled={googleLoading || loading}
+              >
+                <Text style={styles.googleGlyph}>G</Text>
+                <Text style={styles.googleOnlyText}>{googleLoading ? "Opening Google..." : "Sign in with Google"}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Link href="/(auth)/register" style={styles.link}>
+                Sign up
+              </Link>
+            </View>
+
+            <View style={styles.inlineLinks}>
+              <Link href="/(auth)/forgot-password" style={styles.inlineLink}>
+                Forgot password?
+              </Link>
+            </View>
+          </View>
         </View>
-        <Pressable
-          style={[styles.googleButton, (googleLoading || loading) ? styles.buttonDisabled : null]}
-          onPress={handleGoogleLogin}
-          disabled={googleLoading || loading}
-        >
-          <Text style={styles.googleButtonMark}>G</Text>
-          <Text style={styles.googleButtonText}>{googleLoading ? "Opening Google..." : "Continue with Google"}</Text>
-        </Pressable>
-        <Text style={styles.footnote}>
-          <Link href="/(auth)/forgot-password" style={styles.link}>Forgot password?</Link>
-        </Text>
-        <Text style={styles.footnote}>
-          New here? <Link href="/(auth)/register" style={styles.link}>Create account</Link>
-        </Text>
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    borderRadius: radii.xl,
-    padding: spacing.xl,
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.glassChip,
-    ...shadows.card,
-  },
-  heroMarkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  heroMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
+  pageShell: {
+    minHeight: 640,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.card,
+    paddingVertical: spacing.lg,
+  },
+  authCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 32,
+    backgroundColor: "#fefefe",
+    paddingHorizontal: 22,
+    paddingVertical: 28,
+    gap: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.line,
-    ...shadows.glow,
-  },
-  heroMarkImage: {
-    width: 36,
-    height: 36,
-  },
-  heroMarkCopy: {
-    flex: 1,
-  },
-  eyebrow: {
-    color: colors.brandBlue,
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  heroKicker: {
-    color: colors.inkSoft,
-    marginTop: 4,
-    fontWeight: "700",
-  },
-  title: {
-    color: colors.ink,
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: "900",
-  },
-  copy: {
-    color: colors.slate,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  heroStatRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  heroStat: {
-    flex: 1,
-    borderRadius: radii.md,
-    backgroundColor: colors.glassTextMuted,
-    borderWidth: 1,
-    borderColor: colors.line,
-    padding: spacing.md,
-    gap: 4,
-  },
-  heroStatValue: {
-    color: colors.ink,
-    fontWeight: "800",
-  },
-  heroStatLabel: {
-    color: colors.slate,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  formCard: {
-    backgroundColor: colors.glassStrong,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.glassChip,
+    borderColor: "rgba(76, 99, 197, 0.08)",
     ...shadows.card,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: colors.ink,
+  logoRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
-  sectionCopy: {
-    color: colors.slate,
-    marginTop: -2,
-    lineHeight: 20,
+  logoImage: {
+    width: 30,
+    height: 30,
+  },
+  logoWordmark: {
+    color: "#3048b9",
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  headerBlock: {
+    gap: 4,
+  },
+  title: {
+    color: "#2b3663",
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: "700",
+  },
+  formCard: {
+    backgroundColor: "transparent",
+    borderRadius: 0,
+    padding: 0,
+    gap: spacing.md,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 15,
     borderWidth: 1,
-    borderColor: colors.line,
-    color: colors.ink,
+    borderColor: "rgba(43, 54, 99, 0.08)",
+    color: "#24325d",
+    fontSize: 14,
   },
   button: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingVertical: 16,
+    backgroundColor: "#3048b9",
+    borderRadius: 16,
+    paddingVertical: 15,
     alignItems: "center",
-    ...shadows.glow,
+    marginTop: 4,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
-    color: colors.white,
-    fontWeight: "800",
-    fontSize: 16,
-  },
-  error: {
-    color: colors.danger,
-  },
-  footnote: {
-    color: colors.slate,
-    lineHeight: 20,
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.line,
-  },
-  dividerText: {
-    color: colors.slate,
-    fontWeight: "700",
-  },
-  googleButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    borderRadius: radii.md,
-    paddingVertical: 15,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.card,
-    ...shadows.card,
-  },
-  googleButtonMark: {
-    width: 30,
-    height: 30,
-    borderRadius: radii.pill,
-    textAlign: "center",
-    textAlignVertical: "center",
-    backgroundColor: colors.brandBlueSoft,
-    color: colors.brandBlue,
-    fontWeight: "900",
-    lineHeight: 30,
-  },
-  googleButtonText: {
-    color: colors.brandBlueDeep,
+    color: "#ffffff",
     fontWeight: "800",
     fontSize: 15,
   },
-  link: {
-    color: colors.brandBlue,
+  error: {
+    color: colors.danger,
+    lineHeight: 20,
+    fontSize: 13,
+  },
+  socialLabel: {
+    color: "#98a1c3",
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  socialRow: {
+    alignItems: "center",
+  },
+  googleOnlyButton: {
+    minWidth: 220,
+    minHeight: 46,
+    borderRadius: 23,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(43, 54, 99, 0.08)",
+    backgroundColor: "#ffffff",
+  },
+  googleGlyph: {
+    color: "#ea4335",
+    fontWeight: "900",
+    fontSize: 18,
+  },
+  googleOnlyText: {
+    color: "#3048b9",
     fontWeight: "800",
+    fontSize: 14,
+  },
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  footerText: {
+    color: "#98a1c3",
+    fontSize: 12,
+  },
+  inlineLinks: {
+    alignItems: "center",
+    marginTop: -4,
+  },
+  inlineLink: {
+    color: "#3048b9",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  link: {
+    color: "#3048b9",
+    fontWeight: "700",
+    fontSize: 12,
   },
 });

@@ -14,7 +14,14 @@ function BackgroundDecor() {
   );
 }
 
-function Screen({ children, scroll = true, loading = false, refreshControl }) {
+function Screen({
+  children,
+  scroll = true,
+  loading = false,
+  refreshControl,
+  topPadding = spacing.md,
+  horizontalPadding = spacing.lg,
+}) {
   const insets = useSafeAreaInsets();
 
   if (loading) {
@@ -24,14 +31,33 @@ function Screen({ children, scroll = true, loading = false, refreshControl }) {
   const content = scroll ? (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={[styles.content, { paddingBottom: spacing.xxl + insets.bottom + 84 }]}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: topPadding,
+          paddingBottom: spacing.xxl + insets.bottom + 84,
+          paddingHorizontal: horizontalPadding,
+        },
+      ]}
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl ? <RefreshControl tintColor={colors.accent} refreshing={false} onRefresh={refreshControl} /> : undefined}
     >
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.content, styles.staticContent, { paddingBottom: spacing.xxl + insets.bottom + 84 }]}>{children}</View>
+    <View
+      style={[
+        styles.content,
+        styles.staticContent,
+        {
+          paddingTop: topPadding,
+          paddingBottom: spacing.xxl + insets.bottom + 84,
+          paddingHorizontal: horizontalPadding,
+        },
+      ]}
+    >
+      {children}
+    </View>
   );
 
   return (
@@ -53,8 +79,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
     gap: spacing.md,
   },
   staticContent: {

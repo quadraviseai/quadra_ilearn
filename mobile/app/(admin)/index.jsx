@@ -40,8 +40,8 @@ export default function AdminHomeScreen() {
     : [];
 
   return (
-    <Screen loading={state.loading} refreshControl={load}>
-      <AppHeader title="Admin" subtitle="Mobile access for the most-used admin controls." />
+    <Screen loading={state.loading} refreshControl={load} topPadding={0}>
+      <AppHeader title="Admin" subtitle="Mobile access for the most-used admin controls." fullBleed />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
       <SectionCard title="Platform snapshot" subtitle="The core numbers you usually need on the move." tone="accent">

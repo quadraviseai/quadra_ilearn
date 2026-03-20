@@ -2,10 +2,17 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from apps.users.models import TokenSettings, TokenTransaction
+from apps.users.models import TokenSettings, TokenTopUpPurchase, TokenTransaction
 
 
 User = get_user_model()
+
+
+TOKEN_TOP_UP_PACKS = (
+    {"id": "starter", "tokens": 250, "amount": 49},
+    {"id": "standard", "tokens": 600, "amount": 99},
+    {"id": "power", "tokens": 1500, "amount": 199},
+)
 
 
 class TokenError(Exception):
@@ -25,6 +32,10 @@ def serialize_token_settings(settings=None):
         "weak_topic_unlock_cost": active_settings.weak_topic_unlock_cost,
         "timer_reset_cost": active_settings.timer_reset_cost,
     }
+
+
+def get_token_top_up_packs():
+    return [dict(pack) for pack in TOKEN_TOP_UP_PACKS]
 
 
 @transaction.atomic
@@ -140,3 +151,38 @@ def credit_tokens_by_admin(user, amount, admin_user, note=""):
         metadata={"admin_user_id": str(admin_user.id)},
         created_by=admin_user,
     )
+
+
+@transaction.atomic
+def purchase_token_pack(user, pack_id, *, provider="manual", provider_reference=""):
+    selected_pack = next((pack for pack in TOKEN_TOP_UP_PACKS if pack["id"] == str(pack_id or "").strip()), None)
+    if not selected_pack:
+        raise TokenError("Selected token pack is not available.")
+
+    purchase = TokenTopUpPurchase.objects.create(
+        user=user,
+        token_amount=selected_pack["tokens"],
+        amount=selected_pack["amount"],
+        status=TokenTopUpPurchase.Status.SUCCESS,
+        provider=provider or "manual",
+        provider_reference=provider_reference,
+        metadata={"pack_id": selected_pack["id"]},
+    )
+    updated_user = adjust_user_tokens(
+        user,
+        selected_pack["tokens"],
+        TokenTransaction.TransactionType.TOKEN_TOPUP,
+        note=f"Token top-up: {selected_pack['tokens']} tokens",
+        metadata={
+            "purchase_id": str(purchase.id),
+            "pack_id": selected_pack["id"],
+            "amount": str(selected_pack["amount"]),
+            "provider": purchase.provider,
+        },
+    )
+    purchase.metadata = {
+        **purchase.metadata,
+        "balance_after": updated_user.token_balance,
+    }
+    purchase.save(update_fields=["metadata"])
+    return purchase, updated_user

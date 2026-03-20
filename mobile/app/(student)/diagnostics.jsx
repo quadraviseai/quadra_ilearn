@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Picker } from "@react-native-picker/picker";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import AppHeader from "../../src/components/AppHeader";
 import Screen from "../../src/components/Screen";
@@ -10,7 +10,9 @@ import SectionCard from "../../src/components/SectionCard";
 import {
   fetchActiveAttempt,
   fetchAttemptDetail,
+  fetchExams,
   fetchEligibility,
+  fetchSubjects,
   getSelectedFlow,
   resetAttemptTimer,
   saveAnswer,
@@ -65,11 +67,41 @@ function formatTime(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
+function SelectionField({
+  caption,
+  value,
+  placeholder,
+  icon,
+  iconColor,
+  iconWrapStyle,
+  onPress,
+  disabled = false,
+}) {
+  return (
+    <View style={styles.pickerGroup}>
+      <Pressable style={[styles.selectShell, disabled ? styles.disabled : null]} onPress={onPress} disabled={disabled}>
+        <View style={[styles.selectIconWrap, iconWrapStyle]}>
+          <Ionicons name={icon} size={18} color={iconColor} />
+        </View>
+        <View style={styles.selectContent}>
+          <Text style={styles.selectCaption}>{caption}</Text>
+          <Text style={[styles.selectValue, !value ? styles.selectPlaceholder : null]} numberOfLines={1}>
+            {value || placeholder}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={18} color={colors.slate} />
+      </Pressable>
+    </View>
+  );
+}
+
 export default function StudentDiagnosticsScreen() {
   const router = useRouter();
   const intervalRef = useRef(null);
+  const [selectionSheet, setSelectionSheet] = useState({ type: "", open: false });
   const [state, setState] = useState({
     loading: true,
+    exams: [],
     subjects: [],
     selectedSubjectId: "",
     selectedExamId: "",
@@ -129,17 +161,20 @@ export default function StudentDiagnosticsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [subjects, profile, selection] = await Promise.all([
-        apiRequest("/api/diagnostic/subjects"),
+      const [exams, profile, selection] = await Promise.all([
+        fetchExams(),
         apiRequest("/api/students/profile"),
         getSelectedFlow(),
       ]);
-      const selectedSubject =
-        subjects.find((subject) => String(subject.id) === String(selection.subjectId)) || subjects[0] || null;
       const selectedExam =
-        selectedSubject?.exams?.find((exam) => String(exam.id) === String(selection.examId))
-        || selectedSubject?.exams?.find((exam) => [profile.primary_target_exam, profile.secondary_target_exam].filter(Boolean).includes(exam.name))
-        || selectedSubject?.exams?.[0]
+        exams.find((exam) => String(exam.id) === String(selection.examId))
+        || exams.find((exam) => [profile.primary_target_exam, profile.secondary_target_exam].filter(Boolean).includes(exam.name))
+        || exams[0]
+        || null;
+      const subjects = selectedExam?.id ? await fetchSubjects(selectedExam.id) : [];
+      const selectedSubject =
+        subjects.find((subject) => String(subject.id) === String(selection.subjectId))
+        || subjects[0]
         || null;
 
       let eligibility = null;
@@ -154,6 +189,7 @@ export default function StudentDiagnosticsScreen() {
       setState((current) => ({
         ...current,
         loading: false,
+        exams,
         subjects,
         selectedSubjectId: String(selectedSubject?.id || ""),
         selectedExamId: String(selectedExam?.id || ""),
@@ -165,6 +201,7 @@ export default function StudentDiagnosticsScreen() {
       setState((current) => ({
         ...current,
         loading: false,
+        exams: [],
         subjects: [],
         error: error.message,
       }));
@@ -180,8 +217,8 @@ export default function StudentDiagnosticsScreen() {
     };
   }, [load]);
 
+  const selectedExam = state.exams.find((item) => String(item.id) === state.selectedExamId) || null;
   const selectedSubject = state.subjects.find((item) => String(item.id) === state.selectedSubjectId) || null;
-  const examOptions = selectedSubject?.exams || [];
   const currentQuestion = state.questions?.[state.currentIndex] || null;
   const totalQuestions = state.questions?.length || 0;
   const isLastQuestion = totalQuestions > 0 && state.currentIndex === totalQuestions - 1;
@@ -191,7 +228,7 @@ export default function StudentDiagnosticsScreen() {
     [state.answers],
   );
 
-  const refreshSelection = async (subjectId, examId) => {
+  const refreshSelection = async (examId, subjectId) => {
     const eligibility = subjectId && examId ? await fetchEligibility(examId, subjectId) : null;
     setState((current) => ({
       ...current,
@@ -206,6 +243,47 @@ export default function StudentDiagnosticsScreen() {
       expired: false,
       error: "",
     }));
+  };
+
+  const handleExamChange = async (examId) => {
+    try {
+      setState((current) => ({
+        ...current,
+        selectedExamId: String(examId || ""),
+        selectedSubjectId: "",
+        subjects: [],
+        eligibility: null,
+        attempt: null,
+        questions: [],
+        answers: {},
+        currentIndex: 0,
+        timerSeconds: null,
+        expired: false,
+        error: "",
+      }));
+      const subjects = examId ? await fetchSubjects(examId) : [];
+      const nextSubject = subjects[0] || null;
+      const eligibility = examId && nextSubject?.id ? await fetchEligibility(examId, nextSubject.id) : null;
+      setState((current) => ({
+        ...current,
+        subjects,
+        selectedExamId: String(examId || ""),
+        selectedSubjectId: String(nextSubject?.id || ""),
+        eligibility,
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        subjects: [],
+        selectedSubjectId: "",
+        eligibility: null,
+        error: error.message,
+      }));
+    }
+  };
+
+  const handleSubjectChange = async (subjectId) => {
+    await refreshSelection(state.selectedExamId, String(subjectId));
   };
 
   const handleStartOrResume = async () => {
@@ -300,52 +378,67 @@ export default function StudentDiagnosticsScreen() {
   };
 
   return (
-    <Screen loading={state.loading} refreshControl={load}>
-      <AppHeader title="Exams" subtitle="Select the exam, take the mock test with timer, then move straight to the result page." />
+    <Screen loading={state.loading} refreshControl={load} topPadding={0}>
+      <AppHeader
+        title="Exams"
+        subtitle="Select exam  →  Take mock test  →  Submit  →  Review"
+        fullBleed
+      />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
       {!state.attempt ? (
         <>
-          <View style={styles.flowSummary}>
-            <Text style={styles.flowEyebrow}>Simple flow</Text>
-            <Text style={styles.flowTitle}>Select exam, take mock test, submit, then review the result.</Text>
-            <Text style={styles.flowMeta}>Admin-created exams and mapped subjects appear here automatically.</Text>
-          </View>
+          <View style={styles.selectionSection}>
+            <View style={styles.selectionSectionHead}>
+              <Text style={styles.selectionSectionTitle}>Choose your mock test</Text>
+              <Text style={styles.selectionSectionSubtitle}>Pick the exam first, then the mapped subject.</Text>
+            </View>
 
-          <SectionCard title="Choose your mock test" subtitle="This is the only setup needed before the test starts.">
-            <View style={styles.pickerGroup}>
-              <Text style={styles.label}>Subject</Text>
-              <View style={styles.pickerWrap}>
-                <Picker
-                  selectedValue={state.selectedSubjectId}
-                  onValueChange={async (value) => {
-                    const nextSubject = state.subjects.find((subject) => String(subject.id) === String(value));
-                    const nextExam = nextSubject?.exams?.[0] || null;
-                    await refreshSelection(String(value), String(nextExam?.id || ""));
-                  }}
-                  style={styles.picker}
-                >
-                  {state.subjects.map((subject) => (
-                    <Picker.Item key={subject.id} label={subject.name} value={String(subject.id)} />
-                  ))}
-                </Picker>
+            <View style={styles.selectionHero}>
+              <View style={styles.selectionStep}>
+                <View style={styles.selectionStepBadge}>
+                  <Text style={styles.selectionStepBadgeText}>1</Text>
+                </View>
+                <View style={styles.selectionStepCopy}>
+                  <Text style={styles.selectionStepTitle}>Choose exam</Text>
+                  <Text style={styles.selectionStepMeta}>
+                    {selectedExam ? `${selectedExam.subject_count} mapped subjects available` : "Select from admin-created exams"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.selectionArrow}>→</Text>
+              <View style={styles.selectionStep}>
+                <View style={[styles.selectionStepBadge, styles.selectionStepBadgeSoft]}>
+                  <Text style={styles.selectionStepBadgeText}>2</Text>
+                </View>
+                <View style={styles.selectionStepCopy}>
+                  <Text style={styles.selectionStepTitle}>Choose subject</Text>
+                  <Text style={styles.selectionStepMeta}>
+                    {selectedSubject ? `${selectedSubject.question_count} active questions ready` : "Subjects appear after exam selection"}
+                  </Text>
+                </View>
               </View>
             </View>
 
-            <View style={styles.pickerGroup}>
-              <Text style={styles.label}>Exam</Text>
-              <View style={styles.pickerWrap}>
-                <Picker
-                  selectedValue={state.selectedExamId}
-                  onValueChange={async (value) => refreshSelection(state.selectedSubjectId, String(value))}
-                  style={styles.picker}
-                >
-                  {examOptions.length ? examOptions.map((exam) => (
-                    <Picker.Item key={exam.id} label={exam.name} value={String(exam.id)} />
-                  )) : <Picker.Item label="No exam available" value="" />}
-                </Picker>
-              </View>
-            </View>
+            <SelectionField
+              caption="Select exam"
+              value={selectedExam?.name || ""}
+              placeholder="Choose exam"
+              icon="school-outline"
+              iconColor={colors.accentStrong}
+              onPress={() => setSelectionSheet({ type: "exam", open: true })}
+            />
+
+            <SelectionField
+              caption="Select subject"
+              value={selectedSubject?.name || ""}
+              placeholder={state.selectedExamId ? "Choose subject" : "Select exam first"}
+              icon="library-outline"
+              iconColor={colors.brandBlue}
+              iconWrapStyle={styles.selectIconWrapBlue}
+              onPress={() => setSelectionSheet({ type: "subject", open: true })}
+              disabled={!state.selectedExamId || !state.subjects.length}
+            />
 
             {state.eligibility ? (
               <View style={styles.eligibilityBand}>
@@ -366,7 +459,7 @@ export default function StudentDiagnosticsScreen() {
                 {state.starting ? "Opening..." : state.eligibility?.resume ? "Resume mock test" : "Start mock test"}
               </Text>
             </Pressable>
-          </SectionCard>
+          </View>
         </>
       ) : (
         <>
@@ -476,53 +569,178 @@ export default function StudentDiagnosticsScreen() {
           )}
         </>
       )}
+
+      <Modal
+        visible={selectionSheet.open}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectionSheet({ type: "", open: false })}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectionSheet({ type: "", open: false })} />
+          <View style={styles.sheetCard}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{selectionSheet.type === "exam" ? "Choose exam" : "Choose subject"}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetList}>
+              {(selectionSheet.type === "exam" ? state.exams : state.subjects).map((item) => {
+                const selected =
+                  selectionSheet.type === "exam"
+                    ? String(item.id) === state.selectedExamId
+                    : String(item.id) === state.selectedSubjectId;
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.sheetOption, selected ? styles.sheetOptionActive : null]}
+                    onPress={async () => {
+                      if (selectionSheet.type === "exam") {
+                        await handleExamChange(String(item.id));
+                      } else {
+                        await handleSubjectChange(String(item.id));
+                      }
+                      setSelectionSheet({ type: "", open: false });
+                    }}
+                  >
+                    <View style={styles.sheetOptionCopy}>
+                      <Text style={[styles.sheetOptionTitle, selected ? styles.sheetOptionTitleActive : null]}>{item.name}</Text>
+                      <Text style={styles.sheetOptionMeta}>
+                        {selectionSheet.type === "exam"
+                          ? `${item.subject_count} subjects`
+                          : `${item.question_count} active questions`}
+                      </Text>
+                    </View>
+                    {selected ? <Ionicons name="checkmark-circle" size={20} color={colors.accent} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  flowSummary: {
-    gap: 6,
-    paddingHorizontal: 2,
+  selectionSection: {
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+    backgroundColor: colors.white,
   },
-  flowEyebrow: {
-    color: colors.accentStrong,
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+  selectionSectionHead: {
+    gap: 4,
   },
-  flowTitle: {
+  selectionSectionTitle: {
     color: colors.ink,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: "900",
   },
-  flowMeta: {
+  selectionSectionSubtitle: {
     color: colors.slate,
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 19,
+    fontWeight: "700",
+  },
+  selectionHero: {
+    borderRadius: radii.lg,
+    backgroundColor: "#fff6ee",
+    padding: spacing.md,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(251, 100, 4, 0.08)",
+  },
+  selectionStep: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  selectionStepBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+  },
+  selectionStepBadgeSoft: {
+    backgroundColor: colors.brandBlue,
+  },
+  selectionStepBadgeText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  selectionStepCopy: {
+    gap: 2,
+  },
+  selectionStepTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  selectionStepMeta: {
+    color: colors.slate,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  selectionArrow: {
+    alignSelf: "center",
+    color: colors.accentStrong,
+    fontSize: 20,
+    fontWeight: "900",
+    paddingHorizontal: 2,
   },
   pickerGroup: {
     gap: 8,
   },
-  label: {
-    color: colors.inkSoft,
+  selectShell: {
+    minHeight: 76,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: "rgba(16, 62, 111, 0.08)",
+    backgroundColor: "#fffaf6",
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  selectIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffe7d4",
+  },
+  selectIconWrapBlue: {
+    backgroundColor: "#e8f2ff",
+  },
+  selectContent: {
+    flex: 1,
+    gap: 4,
+  },
+  selectCaption: {
+    color: colors.slate,
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.7,
   },
-  pickerWrap: {
-    minHeight: 54,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.lineSoft,
-    backgroundColor: colors.white,
-    justifyContent: "center",
-  },
-  picker: {
+  selectValue: {
     color: colors.ink,
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+  selectPlaceholder: {
+    color: colors.slate,
+    fontWeight: "700",
   },
   eligibilityBand: {
     padding: spacing.md,
@@ -663,5 +881,70 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontSize: 13,
+  },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(16, 25, 40, 0.28)",
+    justifyContent: "flex-end",
+  },
+  sheetCard: {
+    maxHeight: "68%",
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  sheetHandle: {
+    width: 48,
+    height: 5,
+    borderRadius: radii.pill,
+    alignSelf: "center",
+    backgroundColor: "rgba(16, 62, 111, 0.14)",
+  },
+  sheetTitle: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  sheetList: {
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  sheetOption: {
+    minHeight: 64,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.lineSoft,
+    backgroundColor: "#fffaf6",
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  sheetOptionActive: {
+    borderColor: "rgba(251, 100, 4, 0.28)",
+    backgroundColor: "#fff3e8",
+  },
+  sheetOptionCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  sheetOptionTitle: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  sheetOptionTitleActive: {
+    color: colors.accentStrong,
+  },
+  sheetOptionMeta: {
+    color: colors.slate,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

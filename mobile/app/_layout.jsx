@@ -1,5 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
+import { Text, TextInput } from "react-native";
+import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from "@expo-google-fonts/dm-sans";
 
 import AppLoader from "../src/components/AppLoader";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
@@ -72,6 +74,28 @@ function AppNavigator() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_700Bold,
+  });
+
+  useEffect(() => {
+    if (!fontsLoaded) {
+      return;
+    }
+
+    Text.defaultProps = Text.defaultProps || {};
+    Text.defaultProps.style = [{ fontFamily: "DMSans_400Regular" }];
+
+    TextInput.defaultProps = TextInput.defaultProps || {};
+    TextInput.defaultProps.style = [{ fontFamily: "DMSans_400Regular" }];
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return <AppLoader label="Loading fonts" detail="Applying DM Sans across the mobile app" />;
+  }
+
   return (
     <AuthProvider>
       <AppNavigator />

@@ -66,8 +66,8 @@ export default function AdminUsersScreen() {
   };
 
   return (
-    <Screen loading={state.loading} refreshControl={load}>
-      <AppHeader title="Users" subtitle="Token balances and quick admin adjustments from mobile." />
+    <Screen loading={state.loading} refreshControl={load} topPadding={0}>
+      <AppHeader title="Users" subtitle="Token balances and quick admin adjustments from mobile." fullBleed />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
       {[

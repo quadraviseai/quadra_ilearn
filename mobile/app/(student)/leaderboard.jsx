@@ -55,8 +55,8 @@ export default function StudentLeaderboardScreen() {
   );
 
   return (
-    <Screen loading={state.loading} refreshControl={load}>
-      <AppHeader title="Leaderboard" subtitle="Weekly learning-health ranking for the active student cohort." />
+    <Screen loading={state.loading} refreshControl={load} topPadding={0}>
+      <AppHeader title="Leaderboard" subtitle="Weekly learning-health ranking for the active student cohort." fullBleed />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
       <SectionCard title="Your standing" subtitle="A quick summary of your current weekly position." tone="accent">

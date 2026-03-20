@@ -4,21 +4,16 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { colors, gradients, radii, spacing } from "../theme";
 
-function AppHeader({ title, subtitle, showLogout = true }) {
+function AppHeader({ title, subtitle, showLogout = true, fullBleed = false }) {
   const { logout } = useAuth();
 
   return (
-    <LinearGradient colors={gradients.headerGlass} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.wrap}>
-      <View style={styles.topMeta}>
-        <View style={styles.brandChip}>
-          <Text style={styles.brandChipText}>STUDENT APP</Text>
-        </View>
-        {showLogout ? (
-          <Pressable style={styles.logoutButton} onPress={logout}>
-            <Text style={styles.logoutText}>Logout</Text>
-          </Pressable>
-        ) : null}
-      </View>
+    <LinearGradient
+      colors={gradients.headerGlass}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.wrap, fullBleed ? styles.wrapFullBleed : null]}
+    >
       <View style={styles.brandRow}>
         <View style={styles.logoMark}>
           <Image source={require("../../assets/quadravise-logo.png")} style={styles.logoImage} resizeMode="contain" />
@@ -28,6 +23,11 @@ function AppHeader({ title, subtitle, showLogout = true }) {
           <Text style={styles.screenTitle}>{title}</Text>
           {subtitle ? <Text style={styles.screenSubtitle}>{subtitle}</Text> : null}
         </View>
+        {showLogout ? (
+          <Pressable style={styles.logoutButton} onPress={logout}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </Pressable>
+        ) : null}
       </View>
     </LinearGradient>
   );
@@ -35,34 +35,21 @@ function AppHeader({ title, subtitle, showLogout = true }) {
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: spacing.sm,
     marginBottom: spacing.xs,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.lineSoft,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
-  topMeta: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  wrapFullBleed: {
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   brandRow: {
     flexDirection: "row",
     gap: spacing.sm,
     alignItems: "center",
-  },
-  brandChip: {
-    borderRadius: radii.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.accentSoft,
-  },
-  brandChipText: {
-    color: colors.accentStrong,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.9,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   logoMark: {
     width: 48,

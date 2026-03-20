@@ -68,8 +68,8 @@ export default function AdminTokenRulesScreen() {
   ];
 
   return (
-    <Screen loading={state.loading} refreshControl={load}>
-      <AppHeader title="Token Rules" subtitle="Adjust the live token economy without leaving mobile." />
+    <Screen loading={state.loading} refreshControl={load} topPadding={0}>
+      <AppHeader title="Token Rules" subtitle="Adjust the live token economy without leaving mobile." fullBleed />
       {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
       {state.success ? <Text style={styles.success}>{state.success}</Text> : null}
 
