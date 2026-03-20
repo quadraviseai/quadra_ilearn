@@ -23,6 +23,7 @@ class MockTestFlowTests(APITestCase):
             email="student@example.com",
             password="password123",
             role="student",
+            is_verified=True,
         )
         self.student = StudentProfile.objects.create(user=self.student_user, full_name="Student", class_name="")
         login = self.client.post(

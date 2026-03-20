@@ -140,6 +140,8 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid email or password.")
         if not user.is_active:
             raise serializers.ValidationError("This account is inactive.")
+        if user.auth_provider == User.AuthProvider.EMAIL and user.role != User.Role.ADMIN and not user.is_verified:
+            raise serializers.ValidationError("Verify your email before logging in.")
         attrs["user"] = user
         return attrs
 

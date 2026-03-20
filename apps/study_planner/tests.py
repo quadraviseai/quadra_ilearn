@@ -14,6 +14,7 @@ class StudyPlannerApiTests(APITestCase):
             email="planner@example.com",
             password="password123",
             role="student",
+            is_verified=True,
         )
         self.student = StudentProfile.objects.create(user=self.user, full_name="Planner", class_name="10")
         login = self.client.post(

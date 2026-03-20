@@ -35,6 +35,55 @@ export function fetchSubjects(examId) {
   return apiRequest(`/api/diagnostic/exams/${examId}/subjects`);
 }
 
+export function fetchEligibility(examId, subjectId) {
+  const params = new URLSearchParams({ exam_id: String(examId), subject_id: String(subjectId) });
+  return apiRequest(`/api/diagnostic/eligibility?${params.toString()}`);
+}
+
+export async function fetchActiveAttempt(examId, subjectId) {
+  try {
+    const params = new URLSearchParams({ exam_id: String(examId), subject_id: String(subjectId) });
+    return await apiRequest(`/api/diagnostic/attempts/active?${params.toString()}`);
+  } catch (error) {
+    if (error.message === "No active attempt found.") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function startAttempt(examId, subjectId) {
+  return apiRequest("/api/diagnostic/attempts/start", {
+    method: "POST",
+    body: { exam_id: examId, subject_id: subjectId },
+  });
+}
+
+export function fetchAttemptDetail(attemptId) {
+  return apiRequest(`/api/diagnostic/attempts/${attemptId}`);
+}
+
+export function saveAnswer(attemptId, payload) {
+  return apiRequest(`/api/diagnostic/attempts/${attemptId}/answers`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function submitAttempt(attemptId) {
+  return apiRequest(`/api/diagnostic/attempts/${attemptId}/submit`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export function resetAttemptTimer(attemptId) {
+  return apiRequest(`/api/diagnostic/attempts/${attemptId}/reset-timer`, {
+    method: "POST",
+    body: {},
+  });
+}
+
 export async function fetchLatestReport() {
   try {
     return await apiRequest("/api/diagnostic/reports/latest");

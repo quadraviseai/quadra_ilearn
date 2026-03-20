@@ -1,14 +1,14 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, radii, shadows, spacing } from "../theme";
+import { colors, gradients, radii, spacing } from "../theme";
 
 function SectionCard({ title, subtitle, children, tone = "default" }) {
-  const accentBand = tone === "accent" ? ["rgba(251, 100, 4, 0.18)", "rgba(20, 87, 154, 0.08)"] : ["rgba(20, 87, 154, 0.12)", "rgba(251, 100, 4, 0.04)"];
+  const accentBand = tone === "accent" ? gradients.sectionAccent : gradients.commerceBand;
 
   return (
     <View style={styles.shell}>
-      <LinearGradient colors={accentBand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.topBand} />
+      <LinearGradient colors={accentBand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topBand} />
       <View style={styles.card}>
         {(title || subtitle) ? (
           <View style={styles.head}>
@@ -24,33 +24,32 @@ function SectionCard({ title, subtitle, children, tone = "default" }) {
 
 const styles = StyleSheet.create({
   shell: {
-    borderRadius: radii.xl,
-    backgroundColor: colors.card,
+    borderRadius: radii.lg,
+    backgroundColor: colors.section,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.68)",
+    borderColor: colors.lineSoft,
     overflow: "hidden",
-    ...shadows.card,
   },
   topBand: {
-    height: 8,
+    height: 4,
     width: "100%",
   },
   card: {
-    backgroundColor: "rgba(255,255,255,0.92)",
-    padding: spacing.lg,
+    backgroundColor: colors.section,
+    padding: spacing.md,
     gap: spacing.md,
   },
   head: {
-    gap: 6,
+    gap: 4,
   },
   title: {
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: "800",
     color: colors.ink,
   },
   subtitle: {
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 18,
     color: colors.slate,
   },
 });

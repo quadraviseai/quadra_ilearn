@@ -83,9 +83,9 @@ export default function StudentLearnScreen() {
       <Screen refreshControl={load}>
         <AppHeader title="Learn" subtitle="Weak-topic guidance appears here after the first submitted report." />
         {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
-        <SectionCard title="No learning content yet" subtitle="Finish a diagnostic and open the report first.">
+        <SectionCard title="No learning content yet" subtitle="Finish an exam and open the report first.">
           <Pressable style={styles.primaryButton} onPress={() => router.push("/(student)/diagnostics")}>
-            <Text style={styles.primaryButtonText}>Start diagnostic</Text>
+            <Text style={styles.primaryButtonText}>Start exam</Text>
           </Pressable>
         </SectionCard>
       </Screen>
@@ -99,6 +99,12 @@ export default function StudentLearnScreen() {
 
       {activeCard ? (
         <>
+          <View style={styles.topicHero}>
+            <Text style={styles.topicHeroEyebrow}>Learning focus</Text>
+            <Text style={styles.topicHeroTitle}>{activeCard.topic}</Text>
+            <Text style={styles.topicHeroMeta}>{activeCard.chapter || state.report?.subject_name}</Text>
+          </View>
+
           <SectionCard title={activeCard.topic} subtitle={activeCard.chapter || state.report?.subject_name} tone="accent">
             <Text style={styles.headline}>{state.aiReview?.heading || activeCard.topic}</Text>
             <Text style={styles.summary}>{state.aiReview?.layman_explanation || activeCard.summary}</Text>
@@ -174,7 +180,7 @@ export default function StudentLearnScreen() {
         </>
       ) : (
         <SectionCard title="No weak-topic mapping found" subtitle="This report does not have guided concept content yet.">
-          <Text style={styles.bodyText}>Try another report after the next diagnostic attempt.</Text>
+          <Text style={styles.bodyText}>Try another report after the next exam attempt.</Text>
         </SectionCard>
       )}
     </Screen>
@@ -182,6 +188,27 @@ export default function StudentLearnScreen() {
 }
 
 const styles = StyleSheet.create({
+  topicHero: {
+    gap: 4,
+    paddingHorizontal: 2,
+  },
+  topicHeroEyebrow: {
+    color: colors.accentStrong,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  topicHeroTitle: {
+    color: colors.ink,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "900",
+  },
+  topicHeroMeta: {
+    color: colors.slate,
+    fontSize: 13,
+  },
   headline: {
     color: colors.ink,
     fontSize: 18,
@@ -201,7 +228,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     borderRadius: radii.lg,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.line,
     ...shadows.card,
@@ -251,7 +278,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
   },
   topicRowActive: {
-    backgroundColor: "rgba(251, 100, 4, 0.06)",
+    backgroundColor: colors.accentSoft,
     borderRadius: radii.md,
     paddingHorizontal: 10,
   },
@@ -287,14 +314,14 @@ const styles = StyleSheet.create({
     ...shadows.glow,
   },
   primaryButtonText: {
-    color: "#ffffff",
+    color: colors.white,
     fontWeight: "800",
   },
   secondaryButton: {
     flex: 1,
     minHeight: 46,
     borderRadius: 14,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.line,
     alignItems: "center",

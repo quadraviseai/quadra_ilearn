@@ -2,7 +2,7 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors, radii, shadows } from "../../src/theme";
+import { colors, radii } from "../../src/theme";
 
 export default function StudentLayout() {
   const insets = useSafeAreaInsets();
@@ -17,34 +17,33 @@ export default function StudentLayout() {
           fontSize: 11,
           fontWeight: "800",
         },
+        tabBarItemStyle: {
+          borderRadius: 14,
+          marginHorizontal: 2,
+        },
         tabBarStyle: {
-          position: "absolute",
-          left: 14,
-          right: 14,
-          bottom: 12,
-          height: 68 + insets.bottom,
-          paddingTop: 10,
-          paddingBottom: Math.max(insets.bottom, 10),
-          paddingHorizontal: 10,
-          borderRadius: 28,
-          backgroundColor: "rgba(255,255,255,0.98)",
+          height: 64 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingHorizontal: 8,
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          backgroundColor: colors.white,
           borderTopWidth: 1,
-          borderTopColor: "rgba(16, 62, 111, 0.08)",
-          ...shadows.card,
+          borderTopColor: colors.line,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} />,
+          href: null,
         }}
       />
       <Tabs.Screen
         name="diagnostics"
         options={{
-          title: "Test",
+          title: "Exams",
           tabBarIcon: ({ color, size }) => <Ionicons name="flask-outline" color={color} size={size} />,
         }}
       />
@@ -56,17 +55,16 @@ export default function StudentLayout() {
         }}
       />
       <Tabs.Screen
-        name="learn"
-        options={{
-          title: "Learn",
-          tabBarIcon: ({ color, size }) => <Ionicons name="school-outline" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="learn"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen

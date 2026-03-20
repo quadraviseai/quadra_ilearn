@@ -12,6 +12,7 @@ class GuardianApiTests(APITestCase):
             email="guardian@example.com",
             password="password123",
             role="guardian",
+            is_verified=True,
         )
         self.guardian_profile = GuardianProfile.objects.create(user=self.guardian_user, full_name="Guardian")
         login = self.client.post(
@@ -47,6 +48,7 @@ class GuardianApiTests(APITestCase):
             email="student@example.com",
             password="password123",
             role="student",
+            is_verified=True,
         )
         student = StudentProfile.objects.create(user=student_user, full_name="Student", class_name="8")
         link = GuardianStudentLink.objects.create(

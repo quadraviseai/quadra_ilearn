@@ -142,6 +142,10 @@ function LoginPage() {
             </form>
 
             <div className="auth-login-footer">
+              <span><Link to="/forgot-password">Forgot password?</Link></span>
+            </div>
+
+            <div className="auth-login-footer">
               <span>Need a new account?</span>
               <Link to="/register">Create one</Link>
             </div>

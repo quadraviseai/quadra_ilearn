@@ -2,14 +2,14 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, View } from 
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+import AppLoader from "./AppLoader";
 import { colors, radii, shadows, spacing } from "../theme";
 
 function BackgroundDecor() {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <View style={styles.glowTop} />
-      <View style={styles.glowMid} />
-      <View style={styles.glowBottom} />
+      <View style={styles.topWash} />
+      <View style={styles.bottomWash} />
     </View>
   );
 }
@@ -18,21 +18,12 @@ function Screen({ children, scroll = true, loading = false, refreshControl }) {
   const insets = useSafeAreaInsets();
 
   if (loading) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
-        <BackgroundDecor />
-        <View style={styles.loaderWrap}>
-          <View style={styles.loaderCard}>
-            <ActivityIndicator size="large" color={colors.accent} />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
+    return <AppLoader />;
   }
 
   const content = scroll ? (
     <ScrollView
+      style={styles.scroll}
       contentContainerStyle={[styles.content, { paddingBottom: spacing.xxl + insets.bottom + 84 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl ? <RefreshControl tintColor={colors.accent} refreshing={false} onRefresh={refreshControl} /> : undefined}
@@ -40,7 +31,7 @@ function Screen({ children, scroll = true, loading = false, refreshControl }) {
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.content, { paddingBottom: spacing.xxl + insets.bottom + 84 }]}>{children}</View>
+    <View style={[styles.content, styles.staticContent, { paddingBottom: spacing.xxl + insets.bottom + 84 }]}>{children}</View>
   );
 
   return (
@@ -57,27 +48,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.cloud,
   },
+  scroll: {
+    flex: 1,
+  },
   content: {
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     gap: spacing.md,
   },
-  loaderWrap: {
+  staticContent: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.lg,
-  },
-  loaderCard: {
-    width: 88,
-    height: 88,
-    borderRadius: radii.lg,
-    backgroundColor: "rgba(255,255,255,0.88)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.line,
-    ...shadows.card,
   },
   glowTop: {
     position: "absolute",
@@ -86,25 +67,23 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(251, 100, 4, 0.12)",
+    backgroundColor: colors.accentGlow,
   },
-  glowMid: {
+  topWash: {
     position: "absolute",
-    top: 210,
-    left: -60,
-    width: 200,
-    height: 200,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(20, 87, 154, 0.1)",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 180,
+    backgroundColor: "rgba(251, 100, 4, 0.05)",
   },
-  glowBottom: {
+  bottomWash: {
     position: "absolute",
-    bottom: 120,
-    right: -70,
-    width: 240,
-    height: 240,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(242, 178, 71, 0.08)",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+    backgroundColor: "rgba(20, 87, 154, 0.04)",
   },
 });
 

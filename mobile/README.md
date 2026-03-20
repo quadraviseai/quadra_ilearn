@@ -1,6 +1,6 @@
 # QuadraILearn Mobile
 
-Expo-based mobile app for student and guardian users against the live backend.
+Expo-based mobile app for student users against the live backend.
 
 ## Setup
 
@@ -12,21 +12,31 @@ Expo-based mobile app for student and guardian users against the live backend.
 ## Current scope
 
 - Email/password auth against the live backend
+- Email verification and password reset by email
+- Native Google auth
 - Student app:
   - dashboard
-  - study plan
+  - exams
+  - report
+  - learn
   - leaderboard
   - profile
-  - diagnostic subject entry
-- Guardian app:
-  - overview
-  - linked students
-  - invite student
-  - create student
+  - payment section
+- Admin app:
+  - dashboard
+  - users
+  - token rules
 
-## Next phase
+## Release setup
 
-- native Google auth
-- diagnostic attempt flow
+1. `eas login`
+2. `eas build:configure`
+3. Use the profiles in `eas.json`
+4. Set production values in `.env`
+
+## Remaining production work
+
+- custom final icon/splash artwork
 - push notifications
-- APK/EAS build pipeline
+- crash reporting and analytics
+- staged release env separation

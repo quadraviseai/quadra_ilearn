@@ -3,20 +3,28 @@ import * as Google from "expo-auth-session/providers/google";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
-import { colors, radii, shadows, spacing } from "../../src/theme";
+import { colors, gradients, radii, shadows, spacing } from "../../src/theme";
 
 WebBrowser.maybeCompleteAuthSession();
 
 const DEFAULT_GOOGLE_WEB_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
 const DEFAULT_GOOGLE_ANDROID_CLIENT_ID = "52499757157-6724lll0jek5os124d8jctg11kfjhrck.apps.googleusercontent.com";
+const DEFAULT_GOOGLE_IOS_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
+
+function routeForRole(role) {
+  if (role === "admin") {
+    return "/(admin)";
+  }
+  return "/(student)/diagnostics";
+}
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, authenticateWithGoogle } = useAuth();
+  const { login, authenticateWithGoogle, logout } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,12 +33,14 @@ export default function LoginScreen() {
   const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || DEFAULT_GOOGLE_WEB_CLIENT_ID;
   const googleAndroidClientId =
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || DEFAULT_GOOGLE_ANDROID_CLIENT_ID;
+  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || DEFAULT_GOOGLE_IOS_CLIENT_ID;
   const nonce = useMemo(() => `${Date.now()}-quadrailearn-mobile`, []);
   const [googleRequest, googleResponse, promptAsync] = Google.useIdTokenAuthRequest(
     {
       expoClientId: googleClientId,
       webClientId: googleClientId,
       androidClientId: googleAndroidClientId,
+      iosClientId: googleIosClientId,
       scopes: ["openid", "profile", "email"],
       selectAccount: true,
       nonce,
@@ -42,7 +52,12 @@ export default function LoginScreen() {
     setError("");
     try {
       const session = await login({ email, password });
-      router.replace(session.user.role === "guardian" ? "/(guardian)" : "/(student)");
+      if (session.user.role === "guardian") {
+        await logout();
+        setError("Guardian accounts are not supported in this mobile app.");
+        return;
+      }
+      router.replace(routeForRole(session.user.role));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -76,7 +91,12 @@ export default function LoginScreen() {
           credential,
           intent: "login",
         });
-        router.replace(session.user.role === "guardian" ? "/(guardian)" : "/(student)");
+        if (session.user.role === "guardian") {
+          await logout();
+          setError("Guardian accounts are not supported in this mobile app.");
+          return;
+        }
+        router.replace(routeForRole(session.user.role));
       } catch (requestError) {
         setError(requestError.message);
       } finally {
@@ -85,7 +105,7 @@ export default function LoginScreen() {
     };
 
     completeGoogleLogin();
-  }, [authenticateWithGoogle, googleResponse, router]);
+  }, [authenticateWithGoogle, googleResponse, logout, router]);
 
   const handleGoogleLogin = async () => {
     if (!googleRequest) {
@@ -99,20 +119,20 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen scroll={false}>
-      <LinearGradient colors={["#fff4eb", "#eef5ff"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+    <Screen>
+      <LinearGradient colors={gradients.authHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <View style={styles.heroMarkRow}>
-          <LinearGradient colors={[colors.accent, colors.coral]} style={styles.heroMark}>
-            <Text style={styles.heroMarkText}>Q</Text>
-          </LinearGradient>
+          <View style={styles.heroMark}>
+            <Image source={require("../../assets/quadravise-logo.png")} style={styles.heroMarkImage} resizeMode="contain" />
+          </View>
           <View style={styles.heroMarkCopy}>
             <Text style={styles.eyebrow}>QuadraILearn Mobile</Text>
-            <Text style={styles.heroKicker}>Live student and parent workspace</Text>
+            <Text style={styles.heroKicker}>Live student learning workspace</Text>
           </View>
         </View>
         <Text style={styles.title}>Modern learning insight for every exam that matters.</Text>
         <Text style={styles.copy}>
-          Sign in to diagnostics, study plans, streaks, and guardian tracking with the same account used on the web app.
+          Sign in to exams, reports, weak-topic learning, and profile tools with the same account used on the web app.
         </Text>
         <View style={styles.heroStatRow}>
           <View style={styles.heroStat}>
@@ -164,8 +184,10 @@ export default function LoginScreen() {
           <Text style={styles.googleButtonText}>{googleLoading ? "Opening Google..." : "Continue with Google"}</Text>
         </Pressable>
         <Text style={styles.footnote}>
-          New account creation still begins on the web.{" "}
-          <Link href="https://quadrailearn.quadravise.com/register" style={styles.link}>Open registration</Link>
+          <Link href="/(auth)/forgot-password" style={styles.link}>Forgot password?</Link>
+        </Text>
+        <Text style={styles.footnote}>
+          New here? <Link href="/(auth)/register" style={styles.link}>Create account</Link>
         </Text>
       </View>
     </Screen>
@@ -178,7 +200,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.75)",
+    borderColor: colors.glassChip,
     ...shadows.card,
   },
   heroMarkRow: {
@@ -192,12 +214,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.line,
     ...shadows.glow,
   },
-  heroMarkText: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "900",
+  heroMarkImage: {
+    width: 36,
+    height: 36,
   },
   heroMarkCopy: {
     flex: 1,
@@ -232,7 +256,7 @@ const styles = StyleSheet.create({
   heroStat: {
     flex: 1,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.72)",
+    backgroundColor: colors.glassTextMuted,
     borderWidth: 1,
     borderColor: colors.line,
     padding: spacing.md,
@@ -248,12 +272,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   formCard: {
-    backgroundColor: "rgba(255,255,255,0.95)",
+    backgroundColor: colors.glassStrong,
     borderRadius: radii.xl,
     padding: spacing.lg,
     gap: spacing.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.75)",
+    borderColor: colors.glassChip,
     ...shadows.card,
   },
   sectionTitle: {
@@ -286,7 +310,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: "#fff",
+    color: colors.white,
     fontWeight: "800",
     fontSize: 16,
   },

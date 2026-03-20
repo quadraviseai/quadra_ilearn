@@ -19,11 +19,30 @@ async function parseResponse(response) {
     const detail =
       typeof payload === "string"
         ? payload
-        : payload.detail || payload.non_field_errors?.[0] || JSON.stringify(payload);
+        : payload.detail || payload.non_field_errors?.[0] || formatValidationError(payload);
     throw new Error(detail || "Request failed.");
   }
 
   return payload;
+}
+
+function formatValidationError(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "Request failed.";
+  }
+
+  const fieldEntries = Object.entries(payload).filter(([key]) => key !== "detail" && key !== "non_field_errors");
+  if (!fieldEntries.length) {
+    return "Request failed.";
+  }
+
+  const messages = fieldEntries.map(([field, value]) => {
+    const label = field.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    const text = Array.isArray(value) ? value[0] : String(value);
+    return `${label}: ${text}`;
+  });
+
+  return messages.join("\n");
 }
 
 async function refreshAccessToken(session) {
@@ -51,7 +70,8 @@ async function refreshAccessToken(session) {
 export async function apiRequest(path, { method = "GET", token, body } = {}) {
   const storedSession = await readSession();
   const activeToken = token || storedSession?.access;
-  const headers = { "Content-Type": "application/json" };
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const headers = isFormData ? {} : { "Content-Type": "application/json" };
   if (activeToken) {
     headers.Authorization = `Bearer ${activeToken}`;
   }
@@ -59,7 +79,7 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
   let response = await fetch(resolveUrl(path), {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
   });
 
   if (response.status === 401 && storedSession?.refresh) {
@@ -68,7 +88,7 @@ export async function apiRequest(path, { method = "GET", token, body } = {}) {
       response = await fetch(resolveUrl(path), {
         method,
         headers: { ...headers, Authorization: `Bearer ${refreshedToken}` },
-        body: body ? JSON.stringify(body) : undefined,
+        body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
       });
     }
   }

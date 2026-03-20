@@ -1,12 +1,18 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
 
+import AppLoader from "../src/components/AppLoader";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
-import { colors } from "../src/theme";
+
+function routeForRole(role) {
+  if (role === "admin") {
+    return "/(admin)";
+  }
+  return "/(student)/diagnostics";
+}
 
 function AppNavigator() {
-  const { ready, isAuthenticated, user } = useAuth();
+  const { ready, isAuthenticated, user, logout } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -17,41 +23,50 @@ function AppNavigator() {
 
     const inAuthGroup = segments[0] === "(auth)";
     const inStudentGroup = segments[0] === "(student)";
-    const inGuardianGroup = segments[0] === "(guardian)";
+    const inAdminGroup = segments[0] === "(admin)";
+    const inPublicLanding = segments.length === 0;
 
-    if (!isAuthenticated && !inAuthGroup) {
+    if (!isAuthenticated && !inAuthGroup && !inPublicLanding) {
       router.replace("/(auth)/login");
       return;
     }
 
-    if (isAuthenticated && inAuthGroup) {
-      router.replace(user?.role === "guardian" ? "/(guardian)" : "/(student)");
+    if (isAuthenticated && inPublicLanding) {
+      router.replace(routeForRole(user?.role));
       return;
     }
 
-    if (isAuthenticated && user?.role === "student" && inGuardianGroup) {
+    if (isAuthenticated && inAuthGroup) {
+      router.replace(routeForRole(user?.role));
+      return;
+    }
+
+    if (isAuthenticated && user?.role === "guardian") {
+      logout();
+      router.replace("/(auth)/login");
+      return;
+    }
+
+    if (isAuthenticated && user?.role === "student" && inAdminGroup) {
       router.replace("/(student)");
       return;
     }
 
-    if (isAuthenticated && user?.role === "guardian" && inStudentGroup) {
-      router.replace("/(guardian)");
+    if (isAuthenticated && user?.role === "admin" && inStudentGroup) {
+      router.replace("/(admin)");
     }
-  }, [isAuthenticated, ready, router, segments, user?.role]);
+  }, [isAuthenticated, logout, ready, router, segments, user?.role]);
 
   if (!ready) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cloud }}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
+    return <AppLoader label="Checking your session" detail="Loading account state and mobile routes" />;
   }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)/login" />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(admin)" />
       <Stack.Screen name="(student)" />
-      <Stack.Screen name="(guardian)" />
     </Stack>
   );
 }

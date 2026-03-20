@@ -37,8 +37,11 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = get_user_model().objects.get(email="student@example.com")
         self.assertEqual(user.role, "student")
+        self.assertFalse(user.is_verified)
         self.assertEqual(user.token_balance, 1000)
         self.assertTrue(user.referral_code)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("/verify-email?uid=", mail.outbox[0].body)
         profile = StudentProfile.objects.get(user=user, full_name="Student One")
         self.assertEqual(str(profile.date_of_birth), "2011-04-15")
         self.assertEqual(profile.primary_target_exam, "JEE")
@@ -49,6 +52,7 @@ class AuthApiTests(APITestCase):
             email="guardian@example.com",
             password="password123",
             role="guardian",
+            is_verified=True,
         )
 
         response = self.client.post(
@@ -210,7 +214,43 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("/reset-password?uid=", mail.outbox[0].body)
+        self.assertIn("quadrailearn://reset-password", mail.outbox[0].body)
         self.assertIn(settings.DEFAULT_FROM_EMAIL, mail.outbox[0].from_email)
+
+    def test_verify_email_marks_user_verified(self):
+        user = get_user_model().objects.create_user(
+            email="verifyme@example.com",
+            password="password123",
+            role="student",
+        )
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        response = self.client.post(
+            "/api/auth/verify-email",
+            {"uid": uid, "token": token},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.is_verified)
+
+    def test_login_rejects_unverified_email_user(self):
+        user = get_user_model().objects.create_user(
+            email="unverified@example.com",
+            password="password123",
+            role="student",
+        )
+
+        response = self.client.post(
+            "/api/auth/login",
+            {"email": user.email, "password": "password123"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Verify your email before logging in.", str(response.data))
 
     def test_reset_password_updates_password(self):
         user = get_user_model().objects.create_user(
@@ -240,6 +280,7 @@ class AuthApiTests(APITestCase):
             email="me@example.com",
             password="password123",
             role="student",
+            is_verified=True,
         )
 
         login_response = self.client.post(

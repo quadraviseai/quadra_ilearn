@@ -12,6 +12,7 @@ class StudentDashboardApiTests(APITestCase):
             email="student-dashboard@example.com",
             password="password123",
             role="student",
+            is_verified=True,
         )
         StudentProfile.objects.create(
             user=user,
@@ -40,6 +41,7 @@ class StudentDashboardApiTests(APITestCase):
             password="password123",
             role="student",
             phone="9999999999",
+            is_verified=True,
         )
         StudentProfile.objects.create(
             user=user,
@@ -87,6 +89,7 @@ class StudentDashboardApiTests(APITestCase):
             email="student-suggestion@example.com",
             password="password123",
             role="student",
+            is_verified=True,
         )
         StudentProfile.objects.create(
             user=user,
@@ -141,6 +144,7 @@ class StudentDashboardApiTests(APITestCase):
             email="student-suggestion-invalid@example.com",
             password="password123",
             role="student",
+            is_verified=True,
         )
         StudentProfile.objects.create(
             user=user,

@@ -19,6 +19,7 @@ class InternalAdminApiTests(APITestCase):
             password="strongpass123",
             role=User.Role.ADMIN,
             is_staff=True,
+            is_verified=True,
         )
         refresh = RefreshToken.for_user(self.admin_user)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")

@@ -9,7 +9,11 @@ import "./App.css";
 const HomePage = lazy(() => import("./pages/HomePage.jsx"));
 const LoginPage = lazy(() => import("./pages/LoginPage.jsx"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage.jsx"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage.jsx"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage.jsx"));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage.jsx"));
+const PrivacyPolicyMobilePage = lazy(() => import("./pages/PrivacyPolicyMobilePage.jsx"));
+const AccountDeletionPage = lazy(() => import("./pages/AccountDeletionPage.jsx"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage.jsx"));
 const AdminTokenRulesPage = lazy(() => import("./pages/AdminTokenRulesPage.jsx"));
 const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage.jsx"));
@@ -28,7 +32,11 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/privacy/mobile" element={<PrivacyPolicyMobilePage />} />
+        <Route path="/account-deletion" element={<AccountDeletionPage />} />
         <Route
           path="/admin-portal"
           element={

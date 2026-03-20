@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from rest_framework.permissions import AllowAny
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.exceptions import ValidationError
@@ -37,7 +38,7 @@ from apps.users.services import TokenError, get_token_settings, serialize_token_
 
 
 class ExamListView(APIView):
-    permission_classes = [IsStudent]
+    permission_classes = [AllowAny]
 
     def get(self, request):
         exams = Exam.objects.filter(is_active=True).prefetch_related("subjects")
