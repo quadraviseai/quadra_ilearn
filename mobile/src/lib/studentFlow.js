@@ -27,6 +27,14 @@ export async function clearSelectedFlow() {
   await AsyncStorage.removeItem(SELECTION_KEY);
 }
 
+export async function clearSelectedExamAttemptState() {
+  const keys = await AsyncStorage.getAllKeys();
+  const timerKeys = keys.filter((key) => key.startsWith("quadrailearn-mobile-attempt-timer:"));
+  if (timerKeys.length) {
+    await AsyncStorage.multiRemove(timerKeys);
+  }
+}
+
 export function fetchExams() {
   return apiRequest("/api/diagnostic/exams");
 }

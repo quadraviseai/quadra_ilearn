@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   Image,
   Modal,
@@ -11,7 +12,9 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
@@ -19,6 +22,7 @@ import { apiRequest } from "../../src/lib/api";
 import { colors, radii, shadows, spacing } from "../../src/theme";
 
 const brandLogo = require("../../assets/quadravise-logo.png");
+const APP_SHARE_URL = process.env.EXPO_PUBLIC_SHARE_URL || "https://quadrailearn.quadravise.com";
 
 const emptyForm = {
   email: "",
@@ -35,11 +39,12 @@ const emptyForm = {
 };
 
 const auditTabs = [
-  { id: "all", label: "All" },
-  { id: "token", label: "Tokens" },
-  { id: "price", label: "Payments" },
-  { id: "exam", label: "Exams" },
+  { id: "all", label: "All", icon: "apps-outline" },
+  { id: "token", label: "Tokens", icon: "wallet-outline" },
+  { id: "price", label: "Payments", icon: "card-outline" },
+  { id: "exam", label: "Exams", icon: "document-text-outline" },
 ];
+const AUDIT_PAGE_SIZE = 8;
 
 function formatDate(value) {
   if (!value) return "";
@@ -51,8 +56,10 @@ function formatDate(value) {
 function SectionCard({ title, subtitle, children }) {
   return (
     <View style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+      <View style={styles.sectionCardHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+      </View>
       {children}
     </View>
   );
@@ -60,6 +67,8 @@ function SectionCard({ title, subtitle, children }) {
 
 export default function StudentProfileScreen() {
   const { logout } = useAuth();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [state, setState] = useState({
     loading: true,
     saving: false,
@@ -78,6 +87,7 @@ export default function StudentProfileScreen() {
     open: false,
     mode: "",
     filter: "all",
+    page: 1,
   });
 
   const load = useCallback(async () => {
@@ -121,6 +131,11 @@ export default function StudentProfileScreen() {
   useEffect(() => {
     load();
   }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const saveProfile = async () => {
     try {
@@ -128,8 +143,6 @@ export default function StudentProfileScreen() {
       const body = new FormData();
       body.append("phone", form.phone || "");
       body.append("full_name", form.full_name || "");
-      body.append("class_name", form.class_name || "");
-      body.append("school_name", form.school_name || "");
       if (form.referral_code_input) {
         body.append("referral_code_input", form.referral_code_input);
       }
@@ -158,6 +171,9 @@ export default function StudentProfileScreen() {
       }));
       setSelectedImage(null);
       setState((current) => ({ ...current, saving: false, success: "Profile updated successfully." }));
+      if (overlay.mode === "referral") {
+        setOverlay((current) => ({ ...current, open: false }));
+      }
     } catch (error) {
       setState((current) => ({ ...current, saving: false, error: error.message || "Could not save profile." }));
     }
@@ -216,7 +232,7 @@ export default function StudentProfileScreen() {
     if (!form.referral_code) return;
     try {
       await Share.share({
-        message: `Use my QuadraILearn referral code: ${form.referral_code}`,
+        message: `Join me on QuadraILearn. Use my referral code ${form.referral_code} when you sign up.\n${APP_SHARE_URL}`,
         title: "QuadraILearn referral",
       });
     } catch (error) {
@@ -266,11 +282,21 @@ export default function StudentProfileScreen() {
     if (overlay.filter === "all") return auditItems;
     return auditItems.filter((item) => item.kind === overlay.filter);
   }, [auditItems, overlay.filter]);
+  const auditPageCount = Math.max(1, Math.ceil(filteredAuditItems.length / AUDIT_PAGE_SIZE));
+  const auditPage = Math.min(overlay.page || 1, auditPageCount);
+  const paginatedAuditItems = useMemo(() => {
+    const start = (auditPage - 1) * AUDIT_PAGE_SIZE;
+    return filteredAuditItems.slice(start, start + AUDIT_PAGE_SIZE);
+  }, [auditPage, filteredAuditItems]);
+  const isCompact = width < 390;
+  const isNarrow = width < 360;
+  const shellPadding = isNarrow ? 14 : isCompact ? 16 : 18;
+  const titleSize = isNarrow ? 24 : isCompact ? 28 : 32;
 
   return (
     <Screen loading={state.loading} refreshControl={load} topPadding={0} horizontalPadding={0}>
-      <View style={styles.pageShell}>
-        <View style={styles.topBar}>
+      <View style={[styles.pageShell, { paddingHorizontal: shellPadding, paddingTop: insets.top + 10 }]}>
+        <View style={[styles.topBar, { marginHorizontal: -shellPadding }, isCompact && styles.topBarCompact]}>
           <View style={styles.brandWrap}>
             <View style={styles.logoBox}>
               <Image source={brandLogo} style={styles.logoImage} resizeMode="contain" />
@@ -282,21 +308,23 @@ export default function StudentProfileScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.pageTitle}>Profile</Text>
+        <Text style={[styles.pageTitle, { fontSize: titleSize, lineHeight: titleSize + 6 }]}>Profile</Text>
         <Text style={styles.pageSubtitle}>Token balance, referral, and student account details.</Text>
 
-        <View style={styles.summaryRow}>
+        <View style={[styles.summaryRow, isCompact && styles.summaryRowCompact]}>
           <Pressable style={[styles.summaryCard, styles.summaryBlue]} onPress={() => setOverlay({ open: true, mode: "wallet", filter: "price" })}>
             <View style={styles.summaryIconCircle}>
               <Ionicons name="wallet-outline" size={20} color={colors.brandBlue} />
             </View>
             <View style={styles.summaryCopy}>
-              <Text style={styles.summaryLabel}>Available Tokens</Text>
               <Text style={styles.summaryValue}>{form.token_balance}</Text>
             </View>
+            <Pressable style={styles.summaryMiniButton} onPress={() => setOverlay({ open: true, mode: "wallet", filter: "price" })}>
+              <Text style={styles.summaryMiniButtonText}>Add</Text>
+            </Pressable>
           </Pressable>
 
-          <Pressable style={[styles.summaryCard, styles.summaryWarm]} onPress={() => setOverlay({ open: true, mode: "referral", filter: "all" })}>
+          <Pressable style={[styles.summaryCard, styles.summaryWarm]} onPress={shareReferral}>
             <View style={styles.summaryIconCircle}>
               <Ionicons name="share-social-outline" size={20} color={colors.accentStrong} />
             </View>
@@ -311,16 +339,16 @@ export default function StudentProfileScreen() {
         {state.success ? <Text style={styles.success}>{state.success}</Text> : null}
 
         <SectionCard title="Profile photo" subtitle="Optional profile image for your student account.">
-          <View style={styles.photoRow}>
+          <View style={[styles.photoRow, isCompact && styles.photoRowCompact]}>
             <View style={styles.photoAvatar}>
               {previewImageUri ? (
                 <Image source={{ uri: previewImageUri }} style={styles.photoImage} />
               ) : (
-                <Text style={styles.photoInitial}>{(form.full_name || form.email || "Q").trim().charAt(0).toUpperCase()}</Text>
+                <Ionicons name="person-circle-outline" size={68} color={colors.brandBlue} />
               )}
             </View>
             <View style={styles.photoContent}>
-              <Text style={styles.photoHeading}>Change Photo</Text>
+              <Text style={styles.photoMeta}>PNG or JPG up to 5 MB</Text>
               <Pressable style={styles.primaryAction} onPress={pickProfileImage}>
                 <Text style={styles.primaryActionText}>Change Photo</Text>
               </Pressable>
@@ -344,22 +372,22 @@ export default function StudentProfileScreen() {
         </SectionCard>
 
         <SectionCard title="Quick actions">
-          <View style={styles.quickActionsRow}>
-            <Pressable style={styles.quickActionCard} onPress={() => setOverlay({ open: true, mode: "audit", filter: "all" })}>
+          <View style={[styles.quickActionsRow, isCompact && styles.quickActionsRowCompact]}>
+            <Pressable style={[styles.quickActionCard, isCompact && styles.quickActionCardCompact]} onPress={() => setOverlay({ open: true, mode: "account", filter: "all", page: 1 })}>
               <View style={styles.quickActionIcon}>
                 <Ionicons name="settings-outline" size={22} color={colors.brandBlue} />
               </View>
               <Text style={styles.quickActionText}>Account{"\n"}Settings</Text>
             </Pressable>
 
-            <Pressable style={styles.quickActionCard} onPress={() => setOverlay({ open: true, mode: "referral", filter: "all" })}>
+            <Pressable style={[styles.quickActionCard, isCompact && styles.quickActionCardCompact]} onPress={() => setOverlay({ open: true, mode: "referral", filter: "all", page: 1 })}>
               <View style={styles.quickActionIcon}>
                 <Ionicons name="people-outline" size={22} color={colors.brandBlue} />
               </View>
               <Text style={styles.quickActionText}>Referral{"\n"}Program</Text>
             </Pressable>
 
-            <Pressable style={styles.quickActionCard} onPress={() => setOverlay({ open: true, mode: "audit", filter: "exam" })}>
+            <Pressable style={[styles.quickActionCard, isCompact && styles.quickActionCardCompact]} onPress={() => setOverlay({ open: true, mode: "security", filter: "exam", page: 1 })}>
               <View style={styles.quickActionIcon}>
                 <Ionicons name="shield-checkmark-outline" size={22} color={colors.brandBlue} />
               </View>
@@ -378,13 +406,17 @@ export default function StudentProfileScreen() {
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>
-                {overlay.mode === "wallet" ? "Add tokens" : overlay.mode === "referral" ? "Referral program" : "Audit log"}
+                {overlay.mode === "wallet" ? "Add tokens" : overlay.mode === "referral" ? "Referral program" : overlay.mode === "account" ? "Account settings" : overlay.mode === "security" ? "Security settings" : "Audit log"}
               </Text>
               <Text style={styles.modalSubtitle}>
                 {overlay.mode === "wallet"
                   ? "Choose a pack and add tokens to your account."
                   : overlay.mode === "referral"
                     ? "Share your code or apply one referral code once."
+                    : overlay.mode === "account"
+                      ? "Your student profile details and account actions."
+                      : overlay.mode === "security"
+                        ? "Security, privacy, and session controls."
                     : "Token, payment, and exam activity from your profile."}
               </Text>
             </View>
@@ -445,21 +477,58 @@ export default function StudentProfileScreen() {
             </ScrollView>
           ) : null}
 
+          {overlay.mode === "account" ? (
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Email</Text>
+                <TextInput style={[styles.input, styles.inputMuted]} editable={false} value={form.email} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Phone</Text>
+                <TextInput style={[styles.input, styles.inputMuted]} editable={false} value={form.phone || "Not added"} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Full name</Text>
+                <TextInput style={[styles.input, styles.inputMuted]} editable={false} value={form.full_name || "Not added"} />
+              </View>
+            </ScrollView>
+          ) : null}
+
+          {overlay.mode === "security" ? (
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <View style={styles.infoPanel}>
+                <Text style={styles.infoPanelTitle}>Signed in as</Text>
+                <Text style={styles.infoPanelValue}>{form.email}</Text>
+                <Text style={styles.infoPanelText}>Use logout if you want to sign in with a different account on this device.</Text>
+              </View>
+              <Pressable style={styles.secondaryAction} onPress={logout}>
+                <Text style={styles.secondaryActionText}>Logout from this device</Text>
+              </Pressable>
+            </ScrollView>
+          ) : null}
+
           {overlay.mode === "audit" ? (
             <>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.auditTabs}>
-                {auditTabs.map((tab) => (
-                  <Pressable
-                    key={tab.id}
-                    style={[styles.auditTab, overlay.filter === tab.id ? styles.auditTabActive : null]}
-                    onPress={() => setOverlay((current) => ({ ...current, filter: tab.id }))}
-                  >
-                    <Text style={[styles.auditTabText, overlay.filter === tab.id ? styles.auditTabTextActive : null]}>{tab.label}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+              <View style={styles.auditStickyHeader}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.auditTabs}>
+                  {auditTabs.map((tab) => (
+                    <Pressable
+                      key={tab.id}
+                      style={[styles.auditTab, overlay.filter === tab.id ? styles.auditTabActive : null]}
+                      onPress={() => setOverlay((current) => ({ ...current, filter: tab.id, page: 1 }))}
+                    >
+                      <Ionicons
+                        name={tab.icon}
+                        size={14}
+                        color={overlay.filter === tab.id ? colors.white : colors.ink}
+                      />
+                      <Text style={[styles.auditTabText, overlay.filter === tab.id ? styles.auditTabTextActive : null]}>{tab.label}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
               <ScrollView contentContainerStyle={styles.modalContent}>
-                {filteredAuditItems.map((item) => (
+                {paginatedAuditItems.map((item) => (
                   <View key={item.id} style={styles.auditRow}>
                     <View style={styles.auditRowIcon}>
                       <Ionicons name={item.icon} size={18} color={colors.brandBlue} />
@@ -472,6 +541,27 @@ export default function StudentProfileScreen() {
                     <Text style={[styles.auditRowValue, item.tone === "positive" ? styles.positive : null]}>{item.value}</Text>
                   </View>
                 ))}
+                {filteredAuditItems.length ? (
+                  <View style={styles.auditPagination}>
+                    <Pressable
+                      style={[styles.auditPagerButton, auditPage <= 1 ? styles.disabled : null]}
+                      disabled={auditPage <= 1}
+                      onPress={() => setOverlay((current) => ({ ...current, page: Math.max(1, auditPage - 1) }))}
+                    >
+                      <Ionicons name="chevron-back" size={16} color={colors.ink} />
+                      <Text style={styles.auditPagerText}>Prev</Text>
+                    </Pressable>
+                    <Text style={styles.auditPagerMeta}>Page {auditPage} of {auditPageCount}</Text>
+                    <Pressable
+                      style={[styles.auditPagerButton, auditPage >= auditPageCount ? styles.disabled : null]}
+                      disabled={auditPage >= auditPageCount}
+                      onPress={() => setOverlay((current) => ({ ...current, page: Math.min(auditPageCount, auditPage + 1) }))}
+                    >
+                      <Text style={styles.auditPagerText}>Next</Text>
+                      <Ionicons name="chevron-forward" size={16} color={colors.ink} />
+                    </Pressable>
+                  </View>
+                ) : null}
                 {!filteredAuditItems.length ? <Text style={styles.emptyText}>No activity available yet.</Text> : null}
               </ScrollView>
             </>
@@ -491,7 +581,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: 18,
-    marginTop: -12,
+    marginTop: 0,
     gap: 18,
     ...shadows.card,
   },
@@ -505,6 +595,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.lineSoft,
+  },
+  topBarCompact: {
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    rowGap: 10,
   },
   brandWrap: {
     flexDirection: "row",
@@ -560,6 +655,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 14,
   },
+  summaryRowCompact: {
+    flexWrap: "wrap",
+  },
   summaryCard: {
     flex: 1,
     minHeight: 116,
@@ -592,6 +690,20 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  summaryMiniButton: {
+    minHeight: 30,
+    paddingHorizontal: 12,
+    borderRadius: radii.pill,
+    backgroundColor: colors.brandBlue,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+  },
+  summaryMiniButtonText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: "800",
+  },
   summaryLabel: {
     color: colors.slate,
     fontSize: 12,
@@ -611,7 +723,8 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1,
     borderColor: colors.lineSoft,
-    padding: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 0,
     gap: 16,
     ...shadows.card,
   },
@@ -625,19 +738,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: -8,
+    paddingHorizontal: 20,
+  },
+  sectionCardHeader: {
+    paddingHorizontal: 20,
+    gap: 8,
   },
   photoRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 18,
+    gap: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginHorizontal: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.lineSoft,
+    backgroundColor: "#f8fbff",
+  },
+  photoRowCompact: {
+    flexWrap: "wrap",
   },
   photoAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 30,
-    backgroundColor: "#e8f0ff",
+    width: 78,
+    height: 78,
+    borderRadius: 22,
+    backgroundColor: "#eef5ff",
     borderWidth: 1,
-    borderColor: "#cfe0fb",
+    borderColor: "#d7e6fb",
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
@@ -653,25 +781,28 @@ const styles = StyleSheet.create({
   },
   photoContent: {
     flex: 1,
-    gap: 16,
+    gap: 10,
+    justifyContent: "center",
   },
-  photoHeading: {
-    color: colors.ink,
-    fontSize: 18,
-    fontWeight: "900",
+  photoMeta: {
+    color: colors.slate,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
   },
   primaryAction: {
-    minHeight: 48,
+    minHeight: 42,
     alignSelf: "flex-start",
-    paddingHorizontal: 28,
+    paddingHorizontal: 22,
     borderRadius: radii.pill,
     backgroundColor: colors.brandBlue,
     alignItems: "center",
     justifyContent: "center",
+    ...shadows.card,
   },
   primaryActionText: {
     color: colors.white,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   fieldGroup: {
@@ -700,6 +831,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
   },
+  quickActionsRowCompact: {
+    flexWrap: "wrap",
+  },
   quickActionCard: {
     flex: 1,
     minHeight: 74,
@@ -712,6 +846,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  quickActionCardCompact: {
+    minWidth: "100%",
   },
   quickActionIcon: {
     width: 36,
@@ -746,13 +883,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#f7f8fc",
     paddingTop: spacing.xl,
     paddingHorizontal: spacing.md,
-    gap: spacing.md,
+    gap: 10,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: spacing.md,
+    marginBottom: 0,
+  },
+  auditStickyHeader: {
+    paddingTop: 4,
+    paddingBottom: 6,
+    backgroundColor: "#f7f8fc",
+    zIndex: 2,
   },
   modalTitle: {
     color: colors.ink,
@@ -823,17 +967,51 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  infoPanel: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.lineSoft,
+    backgroundColor: colors.white,
+    padding: 16,
+    gap: 8,
+  },
+  infoPanelTitle: {
+    color: colors.slate,
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  infoPanelValue: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  infoPanelText: {
+    color: colors.slate,
+    fontSize: 13,
+    lineHeight: 19,
+  },
   auditTabs: {
-    gap: spacing.sm,
+    gap: 10,
     paddingRight: spacing.md,
+    paddingBottom: 2,
+    paddingTop: 2,
+    alignItems: "center",
   },
   auditTab: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    minWidth: 86,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
     borderRadius: radii.pill,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.lineSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+    ...shadows.card,
   },
   auditTabActive: {
     backgroundColor: colors.ink,
@@ -841,7 +1019,7 @@ const styles = StyleSheet.create({
   },
   auditTabText: {
     color: colors.ink,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "800",
   },
   auditTabTextActive: {
@@ -849,29 +1027,31 @@ const styles = StyleSheet.create({
   },
   auditRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.sm,
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.lineSoft,
     backgroundColor: colors.white,
-    padding: spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    ...shadows.card,
   },
   auditRowIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.brandBlueSoft,
     alignItems: "center",
     justifyContent: "center",
   },
   auditRowCopy: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   auditRowTitle: {
     color: colors.ink,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
   },
   auditRowSubtitle: {
@@ -888,7 +1068,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     textAlign: "right",
-    maxWidth: 90,
+    maxWidth: 104,
+    paddingTop: 2,
+  },
+  auditPagination: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingTop: 6,
+  },
+  auditPagerButton: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.lineSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 4,
+  },
+  auditPagerText: {
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  auditPagerMeta: {
+    color: colors.slate,
+    fontSize: 12,
+    fontWeight: "700",
   },
   positive: {
     color: colors.success,

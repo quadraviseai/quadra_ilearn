@@ -3,7 +3,7 @@ from rest_framework import serializers
 from apps.diagnostics.models import ConceptMastery, TestAttempt
 from apps.learning_health.serializers import LearningHealthSnapshotSerializer
 from apps.students.models import StudentProfile
-from apps.users.models import TokenTransaction
+from apps.users.models import PushDevice, TokenTransaction
 from apps.users.services import (
     TokenError,
     apply_referral_bonus,
@@ -95,6 +95,7 @@ class StudentDashboardSummarySerializer(serializers.ModelSerializer):
 class StudentProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     phone = serializers.CharField(source="user.phone", allow_blank=True, required=False)
+    class_name = serializers.CharField(required=False, allow_blank=True)
     token_balance = serializers.IntegerField(source="user.token_balance", read_only=True)
     referral_code = serializers.CharField(source="user.referral_code", read_only=True)
     referred_by_email = serializers.EmailField(source="user.referred_by.email", read_only=True)
@@ -184,6 +185,19 @@ class TokenTopUpPurchaseRequestSerializer(serializers.Serializer):
     pack_id = serializers.CharField(max_length=30)
     provider = serializers.CharField(required=False, allow_blank=True, default="mobile-demo")
     provider_reference = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class PushDeviceRegistrationSerializer(serializers.Serializer):
+    expo_push_token = serializers.CharField(max_length=255)
+    platform = serializers.ChoiceField(choices=PushDevice.Platform.choices)
+    device_id = serializers.CharField(required=False, allow_blank=True, default="")
+    app_version = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class PushTestNotificationSerializer(serializers.Serializer):
+    title = serializers.CharField(required=False, allow_blank=True, default="QuadraILearn")
+    body = serializers.CharField(required=False, allow_blank=True, default="This is a test push notification.")
+    screen = serializers.CharField(required=False, allow_blank=True, default="profile")
 
 
 class StudentTokenTransactionSerializer(serializers.ModelSerializer):

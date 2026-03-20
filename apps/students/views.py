@@ -9,6 +9,8 @@ from apps.diagnostics.models import PaymentRecord, TestAttempt
 from apps.diagnostics.permissions import IsStudent
 from apps.students.serializers import (
     PrimaryExamSuggestionRequestSerializer,
+    PushDeviceRegistrationSerializer,
+    PushTestNotificationSerializer,
     StudentAuditLogSerializer,
     StudentDashboardSummarySerializer,
     StudentProfileSerializer,
@@ -16,7 +18,13 @@ from apps.students.serializers import (
     build_price_transaction_rows,
 )
 from apps.students.services import PrimaryExamSuggestionError, suggest_primary_exam_with_gemini
-from apps.users.services import TokenError, purchase_token_pack
+from apps.users.services import (
+    PushNotificationError,
+    TokenError,
+    purchase_token_pack,
+    register_push_device,
+    send_expo_push_notification,
+)
 
 
 class StudentDashboardSummaryView(APIView):
@@ -95,6 +103,53 @@ class StudentAuditLogView(APIView):
             }
         )
         return Response(serializer.data)
+
+
+class StudentPushDeviceView(APIView):
+    permission_classes = [IsStudent]
+
+    def post(self, request):
+        serializer = PushDeviceRegistrationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            device = register_push_device(
+                request.user,
+                serializer.validated_data["expo_push_token"],
+                serializer.validated_data["platform"],
+                device_id=serializer.validated_data.get("device_id", ""),
+                app_version=serializer.validated_data.get("app_version", ""),
+            )
+        except PushNotificationError as exc:
+            raise ValidationError({"expo_push_token": str(exc)}) from exc
+
+        return Response(
+            {
+                "id": device.id,
+                "platform": device.platform,
+                "expo_push_token": device.expo_push_token,
+                "last_registered_at": device.last_registered_at,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class StudentPushTestNotificationView(APIView):
+    permission_classes = [IsStudent]
+
+    def post(self, request):
+        serializer = PushTestNotificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            tickets = send_expo_push_notification(
+                request.user.push_devices.filter(is_active=True),
+                title=serializer.validated_data["title"],
+                body=serializer.validated_data["body"],
+                data={"screen": serializer.validated_data.get("screen") or "profile"},
+            )
+        except PushNotificationError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+
+        return Response({"sent_count": len(tickets), "tickets": tickets})
 
 
 class StudentPrimaryExamSuggestionView(APIView):

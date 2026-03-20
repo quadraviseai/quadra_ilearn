@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from apps.diagnostics.models import Exam, PaymentRecord, Subject, TestAttempt
 from apps.students.models import StudentProfile
-from apps.users.models import TokenTopUpPurchase, TokenTransaction
+from apps.users.models import PushDevice, TokenTopUpPurchase, TokenTransaction
 
 
 class StudentDashboardApiTests(APITestCase):
@@ -274,3 +274,76 @@ class StudentDashboardApiTests(APITestCase):
             TokenTransaction.TransactionType.ADMIN_ADJUSTMENT,
             {item["transaction_type"] for item in response.data["token_transactions"]},
         )
+
+    def test_push_device_registration_saves_expo_token(self):
+        user = get_user_model().objects.create_user(
+            email="student-push@example.com",
+            password="password123",
+            role="student",
+            is_verified=True,
+        )
+        StudentProfile.objects.create(user=user, full_name="Push Student", class_name="10")
+
+        login_response = self.client.post(
+            "/api/auth/login",
+            {"email": user.email, "password": "password123"},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}")
+
+        response = self.client.post(
+            "/api/students/profile/push-device",
+            {
+                "expo_push_token": "ExponentPushToken[test-token]",
+                "platform": "android",
+                "device_id": "device-123",
+                "app_version": "1.0.1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            PushDevice.objects.filter(
+                user=user,
+                expo_push_token="ExponentPushToken[test-token]",
+                platform="android",
+                is_active=True,
+            ).exists()
+        )
+
+    @patch("apps.users.services.request.urlopen")
+    def test_test_notification_endpoint_sends_expo_push(self, mock_urlopen):
+        user = get_user_model().objects.create_user(
+            email="student-push-send@example.com",
+            password="password123",
+            role="student",
+            is_verified=True,
+        )
+        StudentProfile.objects.create(user=user, full_name="Push Sender", class_name="10")
+        PushDevice.objects.create(
+            user=user,
+            expo_push_token="ExponentPushToken[test-send]",
+            platform="android",
+        )
+
+        mock_response = mock_urlopen.return_value.__enter__.return_value
+        mock_response.read.return_value = b'{"data":[{"status":"ok","id":"ticket-1"}]}'
+
+        login_response = self.client.post(
+            "/api/auth/login",
+            {"email": user.email, "password": "password123"},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}")
+
+        response = self.client.post(
+            "/api/students/profile/test-notification",
+            {"title": "Hello", "body": "Test body", "screen": "profile"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["sent_count"], 1)

@@ -151,3 +151,29 @@ class TokenTopUpPurchase(models.Model):
 
     def __str__(self):
         return f"{self.user.email}: {self.token_amount} tokens"
+
+
+class PushDevice(models.Model):
+    class Platform(models.TextChoices):
+        ANDROID = "android", "Android"
+        IOS = "ios", "iOS"
+        WEB = "web", "Web"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey("User", on_delete=models.CASCADE, related_name="push_devices")
+    expo_push_token = models.CharField(max_length=255, unique=True)
+    platform = models.CharField(max_length=20, choices=Platform.choices)
+    device_id = models.CharField(max_length=255, blank=True)
+    app_version = models.CharField(max_length=50, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_registered_at = models.DateTimeField(auto_now=True)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    last_opened_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-last_registered_at", "-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email}: {self.platform}"

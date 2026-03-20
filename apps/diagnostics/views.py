@@ -230,6 +230,7 @@ class ReportLearningView(APIView):
             str(item["concept_id"]): item
             for item in build_adaptive_practice_plan(report)
         }
+        token_settings = get_token_settings()
         for topic in build_weak_topic_summary(report):
             summary = topic["description"] or report.subject.learning_content or f"Review {topic['topic']} before the next retest."
             adaptive = adaptive_lookup.get(str(topic["concept_id"]), {})
@@ -251,6 +252,7 @@ class ReportLearningView(APIView):
                     "ladder": adaptive.get("ladder", ["easy", "medium", "hard"]),
                     "summary": summary,
                     "guidance": guidance,
+                    "token_cost": token_settings.weak_topic_unlock_cost,
                 }
             )
         unlocked_concept_ids = list(
@@ -265,7 +267,8 @@ class ReportLearningView(APIView):
                 "improvement_loop": build_improvement_loop(report),
                 "mistake_analysis": build_mistake_analysis(report),
                 "token_balance": request.user.token_balance,
-                "token_settings": serialize_token_settings(get_token_settings()),
+                "token_settings": serialize_token_settings(token_settings),
+                "weak_topic_unlock_cost": token_settings.weak_topic_unlock_cost,
                 "unlocked_concept_ids": unlocked_concept_ids,
             }
         )

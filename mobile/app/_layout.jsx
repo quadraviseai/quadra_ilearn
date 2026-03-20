@@ -5,6 +5,11 @@ import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from "@
 
 import AppLoader from "../src/components/AppLoader";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
+import {
+  attachNotificationHandlers,
+  registerForPushNotificationsAsync,
+  syncPushDevice,
+} from "../src/lib/notifications";
 
 function routeForRole(role) {
   if (role === "admin") {
@@ -58,6 +63,41 @@ function AppNavigator() {
       router.replace("/(admin)");
     }
   }, [isAuthenticated, logout, ready, router, segments, user?.role]);
+
+  useEffect(() => {
+    if (!ready || !isAuthenticated || user?.role !== "student") {
+      return;
+    }
+
+    let active = true;
+    const sync = async () => {
+      try {
+        const token = await registerForPushNotificationsAsync();
+        if (active && token) {
+          await syncPushDevice(token);
+        }
+      } catch {
+        // Ignore registration failure for now; app flow should continue.
+      }
+    };
+
+    sync();
+    const detach = attachNotificationHandlers((data) => {
+      const screen = data?.screen;
+      if (screen === "diagnostics") {
+        router.push("/(student)/diagnostics");
+      } else if (screen === "report" && data?.reportId) {
+        router.push({ pathname: "/(student)/report", params: { reportId: String(data.reportId) } });
+      } else if (screen === "profile") {
+        router.push("/(student)/profile");
+      }
+    });
+
+    return () => {
+      active = false;
+      detach?.();
+    };
+  }, [isAuthenticated, ready, router, user?.role]);
 
   if (!ready) {
     return <AppLoader label="Checking your session" detail="Loading account state and mobile routes" />;

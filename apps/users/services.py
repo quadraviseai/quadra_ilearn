@@ -1,8 +1,12 @@
+import json
+from urllib import error, request
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from apps.users.models import TokenSettings, TokenTopUpPurchase, TokenTransaction
+from apps.users.models import PushDevice, TokenSettings, TokenTopUpPurchase, TokenTransaction
 
 
 User = get_user_model()
@@ -16,6 +20,10 @@ TOKEN_TOP_UP_PACKS = (
 
 
 class TokenError(Exception):
+    pass
+
+
+class PushNotificationError(Exception):
     pass
 
 
@@ -186,3 +194,85 @@ def purchase_token_pack(user, pack_id, *, provider="manual", provider_reference=
     }
     purchase.save(update_fields=["metadata"])
     return purchase, updated_user
+
+
+@transaction.atomic
+def register_push_device(user, expo_push_token, platform, *, device_id="", app_version=""):
+    normalized_token = str(expo_push_token or "").strip()
+    if not normalized_token:
+        raise PushNotificationError("Push token is required.")
+
+    PushDevice.objects.exclude(user=user).filter(expo_push_token=normalized_token).delete()
+    device, _created = PushDevice.objects.update_or_create(
+        expo_push_token=normalized_token,
+        defaults={
+            "user": user,
+            "platform": platform,
+            "device_id": device_id or "",
+            "app_version": app_version or "",
+            "is_active": True,
+            "last_error": "",
+        },
+    )
+    return device
+
+
+def mark_push_opened(expo_push_token):
+    PushDevice.objects.filter(expo_push_token=str(expo_push_token or "").strip()).update(last_opened_at=timezone.now())
+
+
+def send_expo_push_notification(devices, *, title, body, data=None):
+    active_devices = [device for device in devices if device.is_active and device.expo_push_token]
+    if not active_devices:
+        return []
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if settings.EXPO_PUSH_ACCESS_TOKEN:
+        headers["Authorization"] = f"Bearer {settings.EXPO_PUSH_ACCESS_TOKEN}"
+
+    payload = [
+        {
+            "to": device.expo_push_token,
+            "title": title,
+            "body": body,
+            "data": data or {},
+            "sound": "default",
+            "channelId": "default",
+        }
+        for device in active_devices
+    ]
+    req = request.Request(
+        settings.EXPO_PUSH_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=10) as response:
+            raw_payload = response.read().decode("utf-8")
+            parsed = json.loads(raw_payload or "{}")
+    except error.HTTPError as exc:
+        message = exc.read().decode("utf-8", errors="ignore") or str(exc)
+        raise PushNotificationError(message) from exc
+    except error.URLError as exc:
+        raise PushNotificationError(str(exc)) from exc
+
+    tickets = parsed.get("data", [])
+    now = timezone.now()
+    for index, device in enumerate(active_devices):
+        ticket = tickets[index] if index < len(tickets) else {}
+        status = ticket.get("status")
+        details = ticket.get("details") or {}
+        if status == "ok":
+            PushDevice.objects.filter(pk=device.pk).update(last_sent_at=now, last_error="")
+        else:
+            message = details.get("error") or ticket.get("message") or "Push delivery failed."
+            updates = {"last_error": message}
+            if message == "DeviceNotRegistered":
+                updates["is_active"] = False
+            PushDevice.objects.filter(pk=device.pk).update(**updates)
+    return tickets
