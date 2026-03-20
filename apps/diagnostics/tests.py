@@ -274,6 +274,7 @@ class MockTestFlowTests(APITestCase):
         self.assertTrue(second_response.data["already_unlocked"])
         self.student_user.refresh_from_db()
         self.assertEqual(self.student_user.token_balance, 975)
+        self.assertEqual(mock_generate_review.call_count, 1)
 
     def test_timer_reset_spends_tokens(self):
         start = self.client.post(

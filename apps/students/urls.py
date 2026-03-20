@@ -3,6 +3,7 @@ from django.urls import path
 from apps.students.views import (
     StudentAuditLogView,
     StudentDashboardSummaryView,
+    StudentProfileImageView,
     StudentPushDeviceView,
     StudentPushTestNotificationView,
     StudentPrimaryExamSuggestionView,
@@ -14,6 +15,7 @@ from apps.students.views import (
 urlpatterns = [
     path("dashboard-summary", StudentDashboardSummaryView.as_view(), name="student-dashboard-summary"),
     path("profile", StudentProfileView.as_view(), name="student-profile"),
+    path("profile-image/<uuid:profile_id>", StudentProfileImageView.as_view(), name="student-profile-image"),
     path("profile/audit-log", StudentAuditLogView.as_view(), name="student-audit-log"),
     path("profile/push-device", StudentPushDeviceView.as_view(), name="student-push-device"),
     path("profile/test-notification", StudentPushTestNotificationView.as_view(), name="student-test-notification"),

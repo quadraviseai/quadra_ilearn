@@ -42,6 +42,24 @@ def send_verification_email(user):
     )
 
 
+def send_registration_alert_email(user):
+    recipient = getattr(settings, "REGISTRATION_ALERT_EMAIL", "").strip()
+    if not recipient:
+        return
+    send_mail(
+        subject="New QuadraILearn registration",
+        message=(
+            "A new account was registered.\n\n"
+            f"Email: {user.email}\n"
+            f"Role: {user.role}\n"
+            f"Verified: {'Yes' if user.is_verified else 'No'}\n"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[recipient],
+        fail_silently=False,
+    )
+
+
 def send_password_reset_email(user):
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
@@ -69,6 +87,7 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         send_verification_email(user)
+        send_registration_alert_email(user)
         return Response(
             {
                 "message": "Registration successful. Check your email to verify the account.",

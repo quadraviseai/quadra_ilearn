@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { makeRedirectUri } from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import { Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
@@ -13,6 +14,14 @@ WebBrowser.maybeCompleteAuthSession();
 const DEFAULT_GOOGLE_WEB_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
 const DEFAULT_GOOGLE_ANDROID_CLIENT_ID = "52499757157-6724lll0jek5os124d8jctg11kfjhrck.apps.googleusercontent.com";
 const DEFAULT_GOOGLE_IOS_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
+
+function buildNativeGoogleRedirect(clientId) {
+  const compactClientId = String(clientId || "").trim().replace(/\.apps\.googleusercontent\.com$/i, "");
+  if (!compactClientId) {
+    return undefined;
+  }
+  return `com.googleusercontent.apps.${compactClientId}:/oauthredirect`;
+}
 
 function routeForRole(role) {
   if (role === "admin") {
@@ -33,13 +42,23 @@ export default function LoginScreen() {
   const googleAndroidClientId =
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || DEFAULT_GOOGLE_ANDROID_CLIENT_ID;
   const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || DEFAULT_GOOGLE_IOS_CLIENT_ID;
+  const googleRedirectUri = useMemo(
+    () =>
+      makeRedirectUri({
+        native: Platform.select({
+          android: buildNativeGoogleRedirect(googleAndroidClientId),
+          ios: buildNativeGoogleRedirect(googleIosClientId),
+        }),
+      }),
+    [googleAndroidClientId, googleIosClientId],
+  );
   const nonce = useMemo(() => `${Date.now()}-quadrailearn-mobile`, []);
   const [googleRequest, googleResponse, promptAsync] = Google.useIdTokenAuthRequest(
     {
-      expoClientId: googleClientId,
       webClientId: googleClientId,
       androidClientId: googleAndroidClientId,
       iosClientId: googleIosClientId,
+      redirectUri: Platform.OS === "web" ? undefined : googleRedirectUri,
       scopes: ["openid", "profile", "email"],
       selectAccount: true,
       nonce,

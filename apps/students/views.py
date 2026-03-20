@@ -1,12 +1,16 @@
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.diagnostics.models import PaymentRecord, TestAttempt
 from apps.diagnostics.permissions import IsStudent
+from apps.students.models import StudentProfile
 from apps.students.serializers import (
     PrimaryExamSuggestionRequestSerializer,
     PushDeviceRegistrationSerializer,
@@ -33,6 +37,18 @@ class StudentDashboardSummaryView(APIView):
     def get(self, request):
         serializer = StudentDashboardSummarySerializer(request.user.student_profile)
         return Response(serializer.data)
+
+
+class StudentProfileImageView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, profile_id):
+        profile = get_object_or_404(StudentProfile, pk=profile_id)
+        if not profile.profile_image:
+            raise Http404("Profile image not found.")
+        profile.profile_image.open("rb")
+        return FileResponse(profile.profile_image, as_attachment=False)
 
 
 class StudentProfileView(APIView):

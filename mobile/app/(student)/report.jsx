@@ -191,10 +191,10 @@ export default function StudentReportScreen() {
             <Text style={styles.sectionSubtitle}>This is the outcome of your submitted mock test.</Text>
 
             <View style={styles.summaryGrid}>
-              <View style={isCompact ? styles.summaryTileFull : styles.summaryTileHalf}><SummaryTile icon="document-text-outline" iconColor={colors.brandBlue} iconBg="#e9f1fb" label="Questions" value={state.report?.total_questions} /></View>
-              <View style={isCompact ? styles.summaryTileFull : styles.summaryTileHalf}><SummaryTile icon="checkmark-circle" iconColor={colors.success} iconBg="#dff5ea" label="Correct" value={state.report?.correct_answers} /></View>
-              <View style={isCompact ? styles.summaryTileFull : styles.summaryTileHalf}><SummaryTile icon="close-circle" iconColor={colors.accent} iconBg="#ffe9dd" label="Wrong" value={state.report?.wrong_answers} /></View>
-              <View style={isCompact ? styles.summaryTileFull : styles.summaryTileHalf}><SummaryTile icon="ellipse-outline" iconColor="#4c98f2" iconBg="#e7f1ff" label="Unanswered" value={state.report?.unanswered_answers} /></View>
+              <View style={styles.summaryTileHalf}><SummaryTile icon="document-text-outline" iconColor={colors.brandBlue} iconBg="#e9f1fb" label="Questions" value={state.report?.total_questions} /></View>
+              <View style={styles.summaryTileHalf}><SummaryTile icon="checkmark-circle" iconColor={colors.success} iconBg="#dff5ea" label="Correct" value={state.report?.correct_answers} /></View>
+              <View style={styles.summaryTileHalf}><SummaryTile icon="close-circle" iconColor={colors.accent} iconBg="#ffe9dd" label="Wrong" value={state.report?.wrong_answers} /></View>
+              <View style={styles.summaryTileHalf}><SummaryTile icon="ellipse-outline" iconColor="#4c98f2" iconBg="#e7f1ff" label="Unanswered" value={state.report?.unanswered_answers} /></View>
             </View>
 
             <View style={[styles.actionRow, isCompact && styles.actionRowCompact]}>
@@ -425,13 +425,12 @@ const styles = StyleSheet.create({
   summaryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14,
+    justifyContent: "space-between",
+    rowGap: 14,
   },
   summaryTileHalf: {
-    width: "47.8%",
-  },
-  summaryTileFull: {
-    width: "100%",
+    flexBasis: "48%",
+    maxWidth: "48%",
   },
   summaryTile: {
     minHeight: 126,

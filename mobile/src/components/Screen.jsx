@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 180,
-    backgroundColor: "rgba(251, 100, 4, 0.05)",
+    backgroundColor: "rgba(20, 87, 154, 0.03)",
   },
   bottomWash: {
     position: "absolute",

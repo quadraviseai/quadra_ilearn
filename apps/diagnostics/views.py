@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.diagnostics.models import Exam, Subject, TestAttempt, TestAttemptQuestion
+from apps.diagnostics.models import Exam, Subject, TestAttempt, TestAttemptQuestion, WeakTopicAIReview
 from apps.diagnostics.permissions import IsStudent
 from apps.diagnostics.serializers import (
     AttemptQuestionSerializer,
@@ -255,12 +255,7 @@ class ReportLearningView(APIView):
                     "token_cost": token_settings.weak_topic_unlock_cost,
                 }
             )
-        unlocked_concept_ids = list(
-            request.user.token_transactions.filter(
-                transaction_type=TokenTransaction.TransactionType.WEAK_TOPIC_UNLOCK,
-                metadata__attempt_id=str(report.id),
-            ).values_list("metadata__concept_id", flat=True)
-        )
+        unlocked_concept_ids = list(WeakTopicAIReview.objects.filter(attempt=report).values_list("concept_id", flat=True))
         return Response(
             {
                 "learning_cards": content,
@@ -285,6 +280,16 @@ class ReportLearningAIView(APIView):
             status=TestAttempt.Status.EVALUATED,
         )
         settings = get_token_settings()
+        cached_review = WeakTopicAIReview.objects.filter(attempt=report, concept_id=concept_id).first()
+        if cached_review:
+            return Response(
+                {
+                    **cached_review.content,
+                    "token_balance": request.user.token_balance,
+                    "tokens_spent": 0,
+                    "already_unlocked": True,
+                }
+            )
         already_unlocked = request.user.token_transactions.filter(
             transaction_type=TokenTransaction.TransactionType.WEAK_TOPIC_UNLOCK,
             metadata__attempt_id=str(report.id),
@@ -307,6 +312,11 @@ class ReportLearningAIView(APIView):
                 )
             except TokenError as exc:
                 raise ValidationError({"detail": str(exc)}) from exc
+        WeakTopicAIReview.objects.update_or_create(
+            attempt=report,
+            concept_id=concept_id,
+            defaults={"content": content},
+        )
         return Response(
             {
                 **content,

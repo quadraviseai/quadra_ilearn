@@ -311,3 +311,18 @@ class ConceptMastery(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["student", "concept"], name="unique_student_concept_mastery")
         ]
+
+
+class WeakTopicAIReview(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    attempt = models.ForeignKey(TestAttempt, on_delete=models.CASCADE, related_name="weak_topic_ai_reviews")
+    concept = models.ForeignKey(Concept, on_delete=models.CASCADE, related_name="attempt_ai_reviews")
+    content = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["attempt", "concept"], name="unique_weak_topic_ai_review_per_attempt")
+        ]
+        ordering = ["-updated_at"]

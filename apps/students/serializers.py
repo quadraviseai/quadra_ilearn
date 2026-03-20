@@ -1,4 +1,6 @@
+from django.urls import reverse
 from rest_framework import serializers
+from urllib.parse import urlparse
 
 from apps.diagnostics.models import ConceptMastery, TestAttempt
 from apps.learning_health.serializers import LearningHealthSnapshotSerializer
@@ -138,9 +140,19 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     def get_profile_image_url(self, obj):
         request = self.context.get("request")
         if obj.profile_image:
-            url = obj.profile_image.url
-            return request.build_absolute_uri(url) if request else url
-        return obj.profile_image_url
+            path = reverse("student-profile-image", kwargs={"profile_id": obj.pk})
+            resolved = request.build_absolute_uri(path) if request else path
+            return self._normalize_public_url(resolved)
+        return self._normalize_public_url(obj.profile_image_url)
+
+    def _normalize_public_url(self, value):
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        parsed = urlparse(raw)
+        if parsed.scheme == "http" and parsed.hostname and parsed.hostname not in {"127.0.0.1", "localhost"}:
+            return raw.replace("http://", "https://", 1)
+        return raw
 
     def get_token_top_up_packs(self, _obj):
         return get_token_top_up_packs()

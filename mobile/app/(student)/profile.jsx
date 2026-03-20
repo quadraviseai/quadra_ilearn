@@ -312,19 +312,19 @@ export default function StudentProfileScreen() {
         <Text style={styles.pageSubtitle}>Token balance, referral, and student account details.</Text>
 
         <View style={[styles.summaryRow, isCompact && styles.summaryRowCompact]}>
-          <Pressable style={[styles.summaryCard, styles.summaryBlue]} onPress={() => setOverlay({ open: true, mode: "wallet", filter: "price" })}>
+          <Pressable style={[styles.summaryCard, isCompact && styles.summaryCardCompact, styles.summaryBlue]} onPress={() => setOverlay({ open: true, mode: "wallet", filter: "price" })}>
             <View style={styles.summaryIconCircle}>
               <Ionicons name="wallet-outline" size={20} color={colors.brandBlue} />
             </View>
             <View style={styles.summaryCopy}>
-              <Text style={styles.summaryValue}>{form.token_balance}</Text>
+              <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>{form.token_balance}</Text>
             </View>
             <Pressable style={styles.summaryMiniButton} onPress={() => setOverlay({ open: true, mode: "wallet", filter: "price" })}>
               <Text style={styles.summaryMiniButtonText}>Add</Text>
             </Pressable>
           </Pressable>
 
-          <Pressable style={[styles.summaryCard, styles.summaryWarm]} onPress={shareReferral}>
+          <Pressable style={[styles.summaryCard, isCompact && styles.summaryCardCompact, styles.summaryWarm]} onPress={shareReferral}>
             <View style={styles.summaryIconCircle}>
               <Ionicons name="share-social-outline" size={20} color={colors.accentStrong} />
             </View>
@@ -342,7 +342,7 @@ export default function StudentProfileScreen() {
           <View style={[styles.photoRow, isCompact && styles.photoRowCompact]}>
             <View style={styles.photoAvatar}>
               {previewImageUri ? (
-                <Image source={{ uri: previewImageUri }} style={styles.photoImage} />
+                <Image source={{ uri: previewImageUri }} style={styles.photoImage} resizeMode="cover" />
               ) : (
                 <Ionicons name="person-circle-outline" size={68} color={colors.brandBlue} />
               )}
@@ -670,6 +670,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
   },
+  summaryCardCompact: {
+    minWidth: "100%",
+  },
   summaryBlue: {
     backgroundColor: "#f3f8ff",
   },
@@ -689,6 +692,7 @@ const styles = StyleSheet.create({
   summaryCopy: {
     flex: 1,
     gap: 4,
+    minWidth: 0,
   },
   summaryMiniButton: {
     minHeight: 30,
@@ -711,7 +715,8 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     color: colors.ink,
-    fontSize: 22,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: "900",
   },
   summaryAccent: {
@@ -773,6 +778,7 @@ const styles = StyleSheet.create({
   photoImage: {
     width: "100%",
     height: "100%",
+    borderRadius: 22,
   },
   photoInitial: {
     color: colors.brandBlue,
@@ -832,23 +838,23 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   quickActionsRowCompact: {
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
   },
   quickActionCard: {
     flex: 1,
-    minHeight: 74,
+    minHeight: 68,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.lineSoft,
     backgroundColor: "#f4f7fc",
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingVertical: 12,
-    flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    justifyContent: "center",
+    gap: 8,
   },
   quickActionCardCompact: {
-    minWidth: "100%",
+    minWidth: 0,
   },
   quickActionIcon: {
     width: 36,
@@ -860,10 +866,10 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     color: colors.ink,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 10,
+    lineHeight: 12,
     fontWeight: "700",
-    flex: 1,
+    textAlign: "center",
   },
   saveButton: {
     minHeight: 56,
