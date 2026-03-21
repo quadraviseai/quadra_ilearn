@@ -343,6 +343,75 @@ class InternalAdminApiTests(APITestCase):
             Concept.objects.filter(subject=subject, chapter=chapter, name="Work Energy Power", exams=exam).exists()
         )
 
+    def test_admin_can_smart_import_questions_and_auto_create_hierarchy(self):
+        response = self.client.post(
+            reverse("admin-question-smart-import"),
+            {
+                "exam_name": "JEE Main Physics Free",
+                "exam_set_type": Exam.ExamSetType.FREE,
+                "subject_name": "Physics",
+                "chapter_name": "Kinematics",
+                "concept_name": "Motion in a Straight Line",
+                "questions": [
+                    {
+                        "question_type": Question.QuestionType.MCQ_SINGLE,
+                        "prompt": "A particle starts from rest and accelerates uniformly. Which equation gives final velocity?",
+                        "explanation": "Use v = u + at for constant acceleration.",
+                        "difficulty_level": 2,
+                        "status": Question.Status.ACTIVE,
+                        "options": [
+                            {"option_text": "v = u + at", "is_correct": True, "display_order": 1},
+                            {"option_text": "s = ut + 1/2at^2", "is_correct": False, "display_order": 2},
+                        ],
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["count"], 1)
+
+        exam = Exam.objects.get(name="JEE Main Physics Free")
+        self.assertEqual(exam.exam_set_type, Exam.ExamSetType.FREE)
+        subject = Subject.objects.get(name="Physics")
+        chapter = Chapter.objects.get(subject=subject, name="Kinematics")
+        concept = Concept.objects.get(subject=subject, chapter=chapter, name="Motion in a Straight Line")
+        question = Question.objects.get(concept=concept)
+
+        self.assertTrue(subject.exams.filter(id=exam.id).exists())
+        self.assertTrue(chapter.exams.filter(id=exam.id).exists())
+        self.assertTrue(concept.exams.filter(id=exam.id).exists())
+        self.assertTrue(question.exams.filter(id=exam.id).exists())
+
+    def test_admin_smart_import_rejects_exam_name_with_different_exam_type(self):
+        Exam.objects.create(name="JEE Main", slug="jee-main", exam_set_type=Exam.ExamSetType.REGISTERED)
+
+        response = self.client.post(
+            reverse("admin-question-smart-import"),
+            {
+                "exam_name": "JEE Main",
+                "exam_set_type": Exam.ExamSetType.FREE,
+                "subject_name": "Physics",
+                "chapter_name": "Kinematics",
+                "concept_name": "Motion in a Straight Line",
+                "questions": [
+                    {
+                        "question_type": Question.QuestionType.MCQ_SINGLE,
+                        "prompt": "Sample prompt",
+                        "options": [
+                            {"option_text": "Option A", "is_correct": True, "display_order": 1},
+                            {"option_text": "Option B", "is_correct": False, "display_order": 2},
+                        ],
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("exam_name", response.data)
+
     def test_admin_can_import_templates_from_json(self):
         subject = Subject.objects.create(name="Math", slug="math")
         exam = Exam.objects.create(name="JEE Main", slug="jee-main")

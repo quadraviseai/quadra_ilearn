@@ -1,67 +1,62 @@
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { fetchExams } from "../src/lib/studentFlow";
 
-const EXAMS = [
-  {
-    label: "JEE",
-    description: "Full syllabus tests",
-    icon: "flash",
-    tone: "#1D4ED8",
-    surface: "#EEF4FF",
-    href: { pathname: "/demo/intro", params: { exam: "JEE" } },
-  },
-  {
-    label: "NEET",
-    description: "Biology-focused tests",
-    icon: "leaf",
-    tone: "#15803D",
-    surface: "#EFFBF2",
-    href: { pathname: "/demo/intro", params: { exam: "NEET" } },
-  },
-  {
-    label: "Class 10",
-    description: "Boards preparation",
-    icon: "school",
-    tone: "#CA8A04",
-    surface: "#FFF9E8",
-    href: { pathname: "/demo/intro", params: { exam: "Class 10" } },
-  },
-  {
-    label: "Class 12",
-    description: "Advanced practice",
-    icon: "trophy",
-    tone: "#7C3AED",
-    surface: "#F4EEFF",
-    href: { pathname: "/demo/intro", params: { exam: "Class 12" } },
-  },
-];
-
-const VALUE_POINTS = [
-  "Real exam-level questions",
-  "Instant rank & analysis",
-  "Weak topic detection",
-  "Daily practice system",
-];
+function getExamPresentation(examName) {
+  const value = String(examName || "").toLowerCase();
+  if (value.includes("jee")) {
+    return { icon: "flash", tone: "#1D4ED8", surface: "#EEF4FF", description: "Full syllabus tests" };
+  }
+  if (value.includes("neet") || value.includes("medical") || value.includes("bio")) {
+    return { icon: "leaf", tone: "#15803D", surface: "#EFFBF2", description: "Biology-focused tests" };
+  }
+  if (value.includes("10")) {
+    return { icon: "school", tone: "#CA8A04", surface: "#FFF9E8", description: "Boards preparation" };
+  }
+  if (value.includes("12")) {
+    return { icon: "trophy", tone: "#7C3AED", surface: "#F4EEFF", description: "Advanced practice" };
+  }
+  return { icon: "document-text", tone: "#1D4E89", surface: "#EFF6FF", description: "Mock test practice" };
+}
 
 export default function LandingScreen() {
-  const scrollRef = useRef(null);
-  const [examSectionY, setExamSectionY] = useState(0);
+  const [examState, setExamState] = useState({ loading: true, exams: [], error: "" });
 
-  const scrollToExams = () => {
-    scrollRef.current?.scrollTo({
-      y: Math.max(0, examSectionY - 20),
-      animated: true,
-    });
-  };
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const exams = await fetchExams();
+        const freeExamSets = Array.isArray(exams)
+          ? exams.filter((exam) => String(exam.exam_set_type || "free") === "free")
+          : [];
+        if (!active) {
+          return;
+        }
+        setExamState({ loading: false, exams: freeExamSets, error: "" });
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        setExamState({ loading: false, exams: [], error: error.message || "Unable to load exams." });
+      }
+    };
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-      <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heroSection}>
           <View style={styles.brandRow}>
             <View style={styles.logoWrap}>
@@ -91,29 +86,53 @@ export default function LandingScreen() {
                   <Text style={styles.primaryButtonText}>Start Free Test</Text>
                 </Pressable>
               </Link>
-
-              <Pressable style={styles.secondaryButton} onPress={scrollToExams}>
-                <Text style={styles.secondaryButtonText}>View Exams</Text>
-              </Pressable>
             </View>
           </View>
         </View>
 
-        <View style={[styles.section, styles.sectionCard]} onLayout={(event) => setExamSectionY(event.nativeEvent.layout.y)}>
+        <View style={[styles.section, styles.sectionCard]}>
           <Text style={styles.sectionTitle}>Choose Your Exam</Text>
           <Text style={styles.sectionSubtitle}>Choose your exam and start instantly.</Text>
+          {examState.error ? <Text style={styles.errorText}>{examState.error}</Text> : null}
 
           <View style={styles.examList}>
-            {EXAMS.map((exam) => (
-              <Link key={exam.label} href={exam.href} asChild>
+            {examState.exams.map((exam) => {
+              const presentation = getExamPresentation(exam.name);
+              const questionCount = Number(exam.question_count || 0);
+              return (
+              <Link
+                key={String(exam.id)}
+                href={{
+                  pathname: "/demo/intro",
+                  params: {
+                    exam: exam.name,
+                    examId: String(exam.id),
+                    questionCount: String(questionCount),
+                  },
+                }}
+                asChild
+              >
                 <Pressable style={({ pressed }) => [styles.examCard, pressed ? styles.examCardPressed : null]}>
                   <View style={styles.examCardMain}>
-                    <View style={[styles.examIconWrap, { backgroundColor: exam.surface }]}>
-                      <Ionicons name={exam.icon} size={20} color={exam.tone} />
+                    <View style={[styles.examIconWrap, { backgroundColor: presentation.surface }]}>
+                      <Ionicons name={presentation.icon} size={20} color={presentation.tone} />
                     </View>
                     <View style={styles.examCopy}>
-                      <Text style={styles.examCardLabel}>{exam.label}</Text>
-                      <Text style={styles.examCardDescription}>{exam.description}</Text>
+                      <View style={styles.examTopRow}>
+                        <Text style={styles.examCardLabel}>{exam.name}</Text>
+                        <View style={[styles.examChip, { backgroundColor: presentation.surface }]}>
+                          <Text style={[styles.examChipText, { color: presentation.tone }]}>Free set</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.examCardDescription}>
+                        {questionCount > 0 ? `${questionCount} questions tagged` : presentation.description}
+                      </Text>
+                      <View style={styles.examMetaRow}>
+                        <View style={styles.examMetaChip}>
+                          <Ionicons name="document-text-outline" size={12} color="#64748B" />
+                          <Text style={styles.examMetaText}>{questionCount > 0 ? `${questionCount} Questions` : "Practice Set"}</Text>
+                        </View>
+                      </View>
                     </View>
                     <View style={styles.examActionRow}>
                       <Text style={styles.examStartText}>Start Test</Text>
@@ -122,39 +141,12 @@ export default function LandingScreen() {
                   </View>
                 </Pressable>
               </Link>
-            ))}
+            );
+            })}
           </View>
-        </View>
-
-        <View style={[styles.section, styles.sectionCard]}>
-          <Text style={styles.sectionTitle}>Why Students Choose QuadraLearn</Text>
-          <View style={styles.valueList}>
-            {VALUE_POINTS.map((point) => (
-              <View key={point} style={styles.valueItem}>
-                <Ionicons name="checkmark" size={16} color="#FF7A00" />
-                <Text style={styles.valueText}>{point}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.ctaSection}>
-          <Text style={styles.ctaEyebrow}>Take a free test now</Text>
-          <Text style={styles.ctaTitle}>Get your score, rank & weak areas instantly</Text>
-
-          <View style={styles.ctaPoints}>
-            <Text style={styles.ctaPoint}>Score.</Text>
-            <Text style={styles.ctaDot}>|</Text>
-            <Text style={styles.ctaPoint}>Rank.</Text>
-            <Text style={styles.ctaDot}>|</Text>
-            <Text style={styles.ctaPoint}>Weak Areas.</Text>
-          </View>
-
-          <Link href="/demo" asChild>
-            <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Start Free Test</Text>
-            </Pressable>
-          </Link>
+          {!examState.loading && !examState.error && !examState.exams.length ? (
+            <Text style={styles.emptyText}>No free exam sets are available right now.</Text>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -281,7 +273,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroActionGroup: {
-    gap: 12,
+    gap: 0,
   },
   primaryButton: {
     minHeight: 52,
@@ -297,20 +289,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  secondaryButton: {
-    minHeight: 52,
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryButtonText: {
-    color: "#0F172A",
     fontSize: 15,
     fontWeight: "600",
   },
@@ -340,6 +318,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  errorText: {
+    color: "#B91C1C",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  emptyText: {
+    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+  },
   examList: {
     flexDirection: "column",
     gap: 12,
@@ -347,113 +336,100 @@ const styles = StyleSheet.create({
   examCard: {
     width: "100%",
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E8EDF3",
-    padding: 16,
+    borderColor: "#E2E8F0",
+    padding: 18,
     minHeight: 0,
     shadowColor: "#0F172A",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   examCardPressed: {
     backgroundColor: "#FAFCFE",
+    transform: [{ scale: 0.985 }],
   },
   examCardMain: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
   },
   examIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   examCopy: {
     flex: 1,
-    gap: 2,
+    gap: 6,
+    minWidth: 0,
+  },
+  examTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
   examCardLabel: {
     color: "#0F172A",
     fontSize: 16,
     lineHeight: 22,
     fontWeight: "600",
+    flex: 1,
+  },
+  examChip: {
+    minHeight: 24,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  examChipText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
   },
   examCardDescription: {
     color: "#64748B",
     fontSize: 14,
     lineHeight: 20,
   },
+  examMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 2,
+  },
+  examMetaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 24,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    backgroundColor: "#F8FAFC",
+  },
+  examMetaText: {
+    color: "#475569",
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "600",
+  },
   examActionRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    minHeight: 48,
+    paddingLeft: 8,
   },
   examStartText: {
     color: "#0F172A",
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "600",
-  },
-  valueList: {
-    gap: 10,
-  },
-  valueItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  valueText: {
-    flex: 1,
-    color: "#0F172A",
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "500",
-  },
-  ctaSection: {
-    backgroundColor: "#0F172A",
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    gap: 12,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-  },
-  ctaEyebrow: {
-    color: "#FDBA74",
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  ctaTitle: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    lineHeight: 29,
-    fontWeight: "600",
-  },
-  ctaPoints: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 8,
-  },
-  ctaPoint: {
-    color: "#E2E8F0",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  ctaDot: {
-    color: "#FB923C",
-    fontSize: 13,
-    lineHeight: 18,
   },
 });

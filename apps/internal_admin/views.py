@@ -22,6 +22,7 @@ from apps.internal_admin.serializers import (
     AdminGeneratedQuestionSaveSerializer,
     AdminQuestionSerializer,
     AdminQuestionJsonImportSerializer,
+    AdminQuestionSmartImportSerializer,
     AdminQuestionTemplateSerializer,
     AdminTemplateJsonImportSerializer,
     AdminTemplateQuestionGenerateSerializer,
@@ -439,6 +440,25 @@ class AdminQuestionJsonImportView(APIView):
 
     def post(self, request):
         serializer = AdminQuestionJsonImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        questions = serializer.save()
+        hydrated = Question.objects.select_related("subject", "concept", "concept__chapter").prefetch_related("options", "exams").filter(
+            id__in=[question.id for question in questions]
+        )
+        return Response(
+            {
+                "count": len(questions),
+                "questions": AdminQuestionSerializer(hydrated.order_by("-created_at"), many=True).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminQuestionSmartImportView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def post(self, request):
+        serializer = AdminQuestionSmartImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         questions = serializer.save()
         hydrated = Question.objects.select_related("subject", "concept", "concept__chapter").prefetch_related("options", "exams").filter(

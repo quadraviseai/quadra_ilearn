@@ -139,6 +139,7 @@ function AdminContentPage() {
   const [questionOpen, setQuestionOpen] = useState(false);
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [questionJsonImportOpen, setQuestionJsonImportOpen] = useState(false);
+  const [smartQuestionImportOpen, setSmartQuestionImportOpen] = useState(false);
   const [templateJsonImportOpen, setTemplateJsonImportOpen] = useState(false);
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -187,6 +188,7 @@ function AdminContentPage() {
   const [questionForm] = Form.useForm();
   const [bulkUploadForm] = Form.useForm();
   const [questionJsonImportForm] = Form.useForm();
+  const [smartQuestionImportForm] = Form.useForm();
   const [templateJsonImportForm] = Form.useForm();
   const [generatorForm] = Form.useForm();
   const [createExamForm] = Form.useForm();
@@ -437,6 +439,11 @@ function AdminContentPage() {
   const handleQuestionJsonImportClose = () => {
     setQuestionJsonImportOpen(false);
     questionJsonImportForm.resetFields();
+  };
+
+  const handleSmartQuestionImportClose = () => {
+    setSmartQuestionImportOpen(false);
+    smartQuestionImportForm.resetFields();
   };
 
   const handleTemplateJsonImportClose = () => {
@@ -702,6 +709,47 @@ function AdminContentPage() {
         return;
       }
       messageApi.error(requestError.message || "Question JSON import failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSmartQuestionImportSubmit = async () => {
+    try {
+      const values = await smartQuestionImportForm.validateFields();
+      const file = values.import_file?.[0]?.originFileObj;
+      const jsonText = String(values.json_text || "").trim();
+      let payload;
+      if (jsonText) {
+        payload = JSON.parse(jsonText);
+      } else if (file) {
+        payload = JSON.parse(await file.text());
+      } else {
+        messageApi.error("Upload a JSON file or paste JSON content.");
+        return;
+      }
+      setSaving(true);
+      const response = await apiRequest("/api/admin/questions/smart-import", {
+        method: "POST",
+        token,
+        body: payload,
+      });
+      messageApi.success(
+        response.count > 0
+          ? `Imported ${response.count} questions and updated the exam hierarchy.`
+          : "No questions were imported.",
+      );
+      handleSmartQuestionImportClose();
+      loadData();
+    } catch (requestError) {
+      if (requestError?.errorFields) {
+        return;
+      }
+      if (requestError instanceof SyntaxError) {
+        messageApi.error("The supplied JSON is not valid.");
+        return;
+      }
+      messageApi.error(requestError.message || "Smart question import failed.");
     } finally {
       setSaving(false);
     }
@@ -1681,6 +1729,13 @@ function AdminContentPage() {
             >
               Question bank
             </button>
+            <button
+              type="button"
+              className={`admin-content-sidebar-link${activeSection === "smart-import" ? " is-active" : ""}`}
+              onClick={() => setActiveSection("smart-import")}
+            >
+              Smart import
+            </button>
           </nav>
         </aside>
 
@@ -2030,6 +2085,70 @@ function AdminContentPage() {
               </Card>
             </section>
           ) : null}
+
+          {activeSection === "smart-import" ? (
+            <section className="admin-content-section">
+              <Card
+                title="Smart question import"
+                extra={
+                  <Space wrap>
+                    <Button onClick={() => setSmartQuestionImportOpen(true)}>Upload JSON</Button>
+                    <Button onClick={() => setActiveSection("questions")}>View question bank</Button>
+                  </Space>
+                }
+                className="admin-card"
+              >
+                <Space direction="vertical" size="large" style={{ width: "100%" }}>
+                  <p style={{ margin: 0 }}>
+                    Upload one JSON payload for one exam. The importer will reuse the existing exam if the name and
+                    <code> exam_set_type </code>
+                    match, or create the missing exam, subject, chapter, and concept automatically before saving the questions.
+                  </p>
+                  <Input.TextArea
+                    className="admin-json-editor"
+                    rows={18}
+                    readOnly
+                    value={JSON.stringify(
+                      {
+                        exam_name: "JEE Main Physics Free",
+                        exam_set_type: "free",
+                        subject_name: "Physics",
+                        chapter_name: "Kinematics",
+                        concept_name: "Motion in a Straight Line",
+                        questions: [
+                          {
+                            question_type: "mcq_single",
+                            prompt: "A particle starts from rest with constant acceleration. Which relation gives final velocity?",
+                            explanation: "Use v = u + at for constant acceleration.",
+                            difficulty_level: 2,
+                            status: "active",
+                            options: [
+                              { option_text: "v = u + at", is_correct: true, display_order: 1 },
+                              { option_text: "s = ut + 1/2at^2", is_correct: false, display_order: 2 },
+                            ],
+                          },
+                          {
+                            concept_name: "Relative Motion",
+                            question_type: "mcq_single",
+                            prompt: "Relative speed of two bodies moving opposite is:",
+                            explanation: "Add magnitudes when directions are opposite.",
+                            difficulty_level: 1,
+                            status: "draft",
+                            options: [
+                              { option_text: "Sum of speeds", is_correct: true, display_order: 1 },
+                              { option_text: "Difference of speeds", is_correct: false, display_order: 2 },
+                            ],
+                          },
+                        ],
+                      },
+                      null,
+                      2,
+                    )}
+                  />
+                </Space>
+              </Card>
+            </section>
+          ) : null}
         </div>
       </div>
 
@@ -2291,6 +2410,79 @@ function AdminContentPage() {
                       options: [
                         { option_text: "Option A", is_correct: true, display_order: 1 },
                         { option_text: "Option B", is_correct: false, display_order: 2 },
+                      ],
+                    },
+                  ],
+                },
+                null,
+                2,
+              )}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Smart import questions"
+        open={smartQuestionImportOpen}
+        onCancel={handleSmartQuestionImportClose}
+        onOk={handleSmartQuestionImportSubmit}
+        confirmLoading={saving}
+        width={900}
+      >
+        <Form form={smartQuestionImportForm} layout="vertical">
+          <Form.Item
+            name="import_file"
+            label="JSON file"
+            valuePropName="fileList"
+            getValueFromEvent={(event) => (Array.isArray(event) ? event : event?.fileList)}
+            extra="Optional if you paste JSON below. One file should contain one exam, one subject, one chapter, one or more concepts, and all questions for that exam."
+          >
+            <Upload accept=".json,application/json" beforeUpload={() => false} maxCount={1}>
+              <Button>Select JSON file</Button>
+            </Upload>
+          </Form.Item>
+          <Form.Item
+            name="json_text"
+            label="Or paste JSON"
+            extra="exam_set_type is required for safe exam matching. If an exam with the same name already exists under a different exam_set_type, the import will stop."
+          >
+            <Input.TextArea rows={12} className="admin-json-editor" />
+          </Form.Item>
+          <Form.Item label="Expected JSON shape">
+            <Input.TextArea
+              className="admin-json-editor"
+              rows={18}
+              readOnly
+              value={JSON.stringify(
+                {
+                  exam_name: "JEE Main Physics Free",
+                  exam_set_type: "free",
+                  subject_name: "Physics",
+                  chapter_name: "Kinematics",
+                  concept_name: "Motion in a Straight Line",
+                  questions: [
+                    {
+                      question_type: "mcq_single",
+                      prompt: "A particle starts from rest with constant acceleration. Which relation gives final velocity?",
+                      explanation: "Use v = u + at for constant acceleration.",
+                      difficulty_level: 2,
+                      status: "active",
+                      options: [
+                        { option_text: "v = u + at", is_correct: true, display_order: 1 },
+                        { option_text: "s = ut + 1/2at^2", is_correct: false, display_order: 2 },
+                      ],
+                    },
+                    {
+                      concept_name: "Relative Motion",
+                      question_type: "mcq_single",
+                      prompt: "Relative speed of two bodies moving opposite is:",
+                      explanation: "Add magnitudes when directions are opposite.",
+                      difficulty_level: 1,
+                      status: "draft",
+                      options: [
+                        { option_text: "Sum of speeds", is_correct: true, display_order: 1 },
+                        { option_text: "Difference of speeds", is_correct: false, display_order: 2 },
                       ],
                     },
                   ],

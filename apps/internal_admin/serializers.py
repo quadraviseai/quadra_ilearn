@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
 
@@ -69,6 +70,23 @@ def normalize_template_type(value):
     if not normalized:
         raise serializers.ValidationError("Unsupported template type.")
     return normalized
+
+
+def clean_unique_name_list(values, error_message, allow_empty=False):
+    cleaned_names = []
+    seen_names = set()
+    for value in values or []:
+        normalized_name = " ".join((value or "").split())
+        if not normalized_name:
+            continue
+        normalized_key = normalized_name.casefold()
+        if normalized_key in seen_names:
+            continue
+        seen_names.add(normalized_key)
+        cleaned_names.append(normalized_name)
+    if not cleaned_names and not allow_empty:
+        raise serializers.ValidationError(error_message)
+    return cleaned_names
 
 
 class AdminUserListSerializer(serializers.ModelSerializer):
@@ -906,22 +924,6 @@ class AdminQuestionJsonImportSerializer(serializers.Serializer):
     )
     questions = AdminQuestionJsonImportItemSerializer(many=True, allow_empty=False)
 
-    def _clean_name_list(self, values, error_message, allow_empty=False):
-        cleaned_names = []
-        seen_names = set()
-        for value in values or []:
-            normalized_name = " ".join((value or "").split())
-            if not normalized_name:
-                continue
-            normalized_key = normalized_name.casefold()
-            if normalized_key in seen_names:
-                continue
-            seen_names.add(normalized_key)
-            cleaned_names.append(normalized_name)
-        if not cleaned_names and not allow_empty:
-            raise serializers.ValidationError(error_message)
-        return cleaned_names
-
     def validate_subject_name(self, value):
         normalized = " ".join((value or "").split())
         if not normalized:
@@ -935,10 +937,10 @@ class AdminQuestionJsonImportSerializer(serializers.Serializer):
         return normalized
 
     def validate_exam_names(self, value):
-        return self._clean_name_list(value, "Provide at least one exam name.")
+        return clean_unique_name_list(value, "Provide at least one exam name.")
 
     def validate_concept_names(self, value):
-        return self._clean_name_list(value, "Provide at least one concept name.")
+        return clean_unique_name_list(value, "Provide at least one concept name.")
 
     def validate_questions(self, value):
         if not value:
@@ -960,12 +962,12 @@ class AdminQuestionJsonImportSerializer(serializers.Serializer):
         if missing_exam_names:
             raise serializers.ValidationError({"exam_names": f"Unknown exams: {', '.join(missing_exam_names)}"})
 
-        declared_concept_names = self._clean_name_list(
+        declared_concept_names = clean_unique_name_list(
             attrs.get("concept_names") or [],
             "Provide at least one concept name.",
             allow_empty=True,
         )
-        question_concept_names = self._clean_name_list(
+        question_concept_names = clean_unique_name_list(
             [item.get("concept_name") for item in attrs["questions"]],
             "Each question must reference a concept name.",
         )
@@ -984,7 +986,7 @@ class AdminQuestionJsonImportSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"questions": {index: {"concept_name": "Concept name is required."}}})
             item["concept_name"] = concept_name
 
-            item_exam_names = self._clean_name_list(item.get("exam_names") or exam_names, "Provide at least one exam name.")
+            item_exam_names = clean_unique_name_list(item.get("exam_names") or exam_names, "Provide at least one exam name.")
             invalid_item_exam_names = [name for name in item_exam_names if name.casefold() not in exam_lookup]
             if invalid_item_exam_names:
                 raise serializers.ValidationError(
@@ -1036,6 +1038,179 @@ class AdminQuestionJsonImportSerializer(serializers.Serializer):
                     "concept_id": str(concept.id),
                     "exam_ids": [str(exam.id) for exam in item_exams],
                     "exam_type": item.get("exam_type") or [exam.name for exam in item_exams],
+                    "question_type": item["question_type"],
+                    "prompt": item["prompt"],
+                    "explanation": item.get("explanation", ""),
+                    "difficulty_level": item.get("difficulty_level", 1),
+                    "status": item.get("status", Question.Status.DRAFT),
+                    "options": item.get("options", []),
+                }
+            )
+            serializer.is_valid(raise_exception=True)
+            created.append(serializer.save())
+        return created
+
+
+class AdminQuestionSmartImportItemSerializer(serializers.Serializer):
+    concept_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    question_type = serializers.ChoiceField(choices=Question.QuestionType.choices)
+    prompt = serializers.CharField()
+    explanation = serializers.CharField(required=False, allow_blank=True)
+    difficulty_level = serializers.IntegerField(min_value=1, max_value=5, required=False, default=1)
+    status = serializers.ChoiceField(choices=Question.Status.choices, required=False, default=Question.Status.DRAFT)
+    options = AdminQuestionOptionWriteSerializer(many=True, required=False)
+
+
+class AdminQuestionSmartImportSerializer(serializers.Serializer):
+    exam_name = serializers.CharField(max_length=120)
+    exam_set_type = serializers.ChoiceField(choices=Exam.ExamSetType.choices, required=False, default=Exam.ExamSetType.FREE)
+    subject_name = serializers.CharField(max_length=100)
+    chapter_name = serializers.CharField(max_length=150)
+    concept_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    concept_names = serializers.ListField(
+        child=serializers.CharField(max_length=150),
+        required=False,
+        allow_empty=True,
+    )
+    questions = AdminQuestionSmartImportItemSerializer(many=True, allow_empty=False)
+
+    def validate_exam_name(self, value):
+        normalized = " ".join((value or "").split())
+        if not normalized:
+            raise serializers.ValidationError("Exam name is required.")
+        return normalized
+
+    def validate_subject_name(self, value):
+        normalized = " ".join((value or "").split())
+        if not normalized:
+            raise serializers.ValidationError("Subject name is required.")
+        return normalized
+
+    def validate_chapter_name(self, value):
+        normalized = " ".join((value or "").split())
+        if not normalized:
+            raise serializers.ValidationError("Chapter name is required.")
+        return normalized
+
+    def validate_concept_name(self, value):
+        normalized = " ".join((value or "").split())
+        return normalized
+
+    def validate_concept_names(self, value):
+        return clean_unique_name_list(value, "Provide at least one concept name.", allow_empty=True)
+
+    def validate_questions(self, value):
+        if not value:
+            raise serializers.ValidationError("Provide at least one question.")
+        return value
+
+    def validate(self, attrs):
+        existing_exam = Exam.objects.filter(name__iexact=attrs["exam_name"]).first()
+        if existing_exam and existing_exam.exam_set_type != attrs["exam_set_type"]:
+            raise serializers.ValidationError(
+                {
+                    "exam_name": (
+                        f'Exam "{existing_exam.name}" already exists with exam_set_type '
+                        f'"{existing_exam.exam_set_type}". Use a different exam name or matching exam_set_type.'
+                    )
+                }
+            )
+
+        default_concept_name = attrs.get("concept_name") or ""
+        declared_concept_names = attrs.get("concept_names") or []
+        question_concept_names = []
+        for index, item in enumerate(attrs["questions"]):
+            concept_name = " ".join((item.get("concept_name") or "").split()) or default_concept_name
+            if not concept_name:
+                raise serializers.ValidationError(
+                    {"questions": {index: {"concept_name": "Concept name is required unless a top-level concept_name is provided."}}}
+                )
+            item["concept_name"] = concept_name
+            question_concept_names.append(concept_name)
+
+        concept_names = []
+        seen_names = set()
+        for name in [default_concept_name, *declared_concept_names, *question_concept_names]:
+            normalized = " ".join((name or "").split())
+            if not normalized:
+                continue
+            key = normalized.casefold()
+            if key in seen_names:
+                continue
+            seen_names.add(key)
+            concept_names.append(normalized)
+        if not concept_names:
+            raise serializers.ValidationError({"concept_name": "Provide a concept_name or concept_names."})
+
+        attrs["concept_names"] = concept_names
+        attrs["existing_exam"] = existing_exam
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        exam = validated_data.get("existing_exam")
+        exam_name = validated_data["exam_name"]
+        if not exam:
+            exam = Exam.objects.create(
+                name=exam_name,
+                slug=build_unique_slug(Exam, exam_name, max_length=140),
+                exam_set_type=validated_data["exam_set_type"],
+            )
+
+        subject = Subject.objects.filter(name__iexact=validated_data["subject_name"]).prefetch_related("exams").first()
+        if not subject:
+            subject = Subject.objects.create(
+                name=validated_data["subject_name"],
+                slug=build_unique_slug(Subject, validated_data["subject_name"], max_length=120),
+            )
+        subject.exams.add(exam)
+
+        chapter = Chapter.objects.filter(subject=subject, name__iexact=validated_data["chapter_name"]).prefetch_related("exams").first()
+        if not chapter:
+            chapter = Chapter.objects.create(
+                subject=subject,
+                name=validated_data["chapter_name"],
+                slug=build_unique_slug(Chapter, validated_data["chapter_name"], max_length=160, scope={"subject": subject}),
+            )
+        chapter.exams.add(exam)
+
+        subject_concepts = Concept.objects.filter(subject=subject).select_related("chapter").prefetch_related("exams")
+        concept_lookup = {}
+        for concept in subject_concepts:
+            concept_lookup[concept.name.strip().casefold()] = concept
+
+        for concept_name in validated_data["concept_names"]:
+            key = concept_name.casefold()
+            concept = concept_lookup.get(key)
+            if concept and concept.chapter_id != chapter.id:
+                raise serializers.ValidationError(
+                    {
+                        "concept_name": (
+                            f'Concept "{concept.name}" already exists in subject "{subject.name}" under chapter '
+                            f'"{concept.chapter.name}". Move it first or use a different concept name.'
+                        )
+                    }
+                )
+            if not concept:
+                concept = Concept.objects.create(
+                    subject=subject,
+                    chapter=chapter,
+                    name=concept_name,
+                    slug=build_unique_slug(Concept, concept_name, max_length=160, scope={"subject": subject}),
+                )
+                concept_lookup[key] = concept
+            concept.exams.add(exam)
+
+        created = []
+        for item in validated_data["questions"]:
+            concept = concept_lookup[item["concept_name"].casefold()]
+            serializer = AdminQuestionWriteSerializer(
+                data={
+                    "subject_id": str(subject.id),
+                    "chapter_id": str(chapter.id),
+                    "concept_id": str(concept.id),
+                    "exam_ids": [str(exam.id)],
+                    "exam_type": [exam.name],
                     "question_type": item["question_type"],
                     "prompt": item["prompt"],
                     "explanation": item.get("explanation", ""),
