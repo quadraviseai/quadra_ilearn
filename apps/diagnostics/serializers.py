@@ -17,7 +17,7 @@ class ExamListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Exam
-        fields = ["id", "name", "slug", "is_active", "retest_price", "subject_count"]
+        fields = ["id", "name", "slug", "exam_set_type", "is_active", "retest_price", "subject_count"]
 
     def get_subject_count(self, obj):
         return obj.subjects.filter(is_active=True).count()

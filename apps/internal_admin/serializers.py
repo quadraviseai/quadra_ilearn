@@ -327,7 +327,17 @@ class AdminExamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Exam
-        fields = ["id", "name", "slug", "created_at", "subject_count", "chapter_count", "concept_count", "question_count"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "exam_set_type",
+            "created_at",
+            "subject_count",
+            "chapter_count",
+            "concept_count",
+            "question_count",
+        ]
         read_only_fields = ["slug", "created_at", "subject_count", "chapter_count", "concept_count", "question_count"]
 
     def create(self, validated_data):
@@ -335,10 +345,16 @@ class AdminExamSerializer(serializers.ModelSerializer):
         return Exam.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
+        changed_fields = []
         if "name" in validated_data:
             instance.name = validated_data["name"]
             instance.slug = build_unique_slug(Exam, validated_data["name"], max_length=140, exclude_id=instance.id)
-            instance.save(update_fields=["name", "slug"])
+            changed_fields.extend(["name", "slug"])
+        if "exam_set_type" in validated_data:
+            instance.exam_set_type = validated_data["exam_set_type"]
+            changed_fields.append("exam_set_type")
+        if changed_fields:
+            instance.save(update_fields=changed_fields)
         return instance
 
 

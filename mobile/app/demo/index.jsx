@@ -1,135 +1,147 @@
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
-import { startDemoSession } from "../../src/lib/demoTest";
+import { fetchExams } from "../../src/lib/studentFlow";
 
-function examIcon(name) {
-  const value = String(name || "").toLowerCase();
+const examGenericImage = require("../../assets/exam-generic.png");
+
+function getExamPresentation(examName) {
+  const value = String(examName || "").toLowerCase();
   if (value.includes("jee")) {
-    return "flask-outline";
+    return { icon: "flash", tone: "#1D4ED8", surface: "#EEF4FF", tag: "Competitive" };
   }
-  if (value.includes("neet") || value.includes("medical")) {
-    return "medkit-outline";
+  if (value.includes("neet") || value.includes("medical") || value.includes("bio")) {
+    return { icon: "leaf", tone: "#15803D", surface: "#EFFBF2", tag: "Medical" };
   }
-  if (value.includes("board") || value.includes("cbse") || value.includes("icse")) {
-    return "school-outline";
+  if (value.includes("10")) {
+    return { icon: "school", tone: "#CA8A04", surface: "#FFF9E8", tag: "Boards" };
   }
-  if (value.includes("gate")) {
-    return "construct-outline";
+  if (value.includes("12")) {
+    return { icon: "trophy", tone: "#7C3AED", surface: "#F4EEFF", tag: "Advanced" };
   }
-  return "document-text-outline";
+  return { icon: "document-text", tone: "#1D4E89", surface: "#EFF6FF", tag: "Exam" };
 }
 
-export default function DemoStartScreen() {
+export default function DemoExamSelectionScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const examName = typeof params.exam === "string" && params.exam ? params.exam : "Quick Demo";
+  const [state, setState] = useState({ loading: true, exams: [], error: "" });
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const exams = await fetchExams();
+        if (!active) {
+          return;
+        }
+        setState({ loading: false, exams: Array.isArray(exams) ? exams : [], error: "" });
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        setState({ loading: false, exams: [], error: error.message || "Unable to load exams." });
+      }
+    };
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
-    <Screen>
-      <View style={styles.appHeader}>
-        <Pressable style={styles.headerBack} onPress={() => router.replace("/")}>
-          <Ionicons name="arrow-back" size={18} color="#1D4E89" />
-        </Pressable>
+    <Screen topPadding={8} loading={state.loading}>
+      <View style={styles.header}>
         <View style={styles.headerBrand}>
           <View style={styles.headerLogoWrap}>
             <Image source={require("../../assets/quadravise-logo.png")} style={styles.headerLogo} resizeMode="contain" />
           </View>
-          <Text style={styles.headerBrandText}>QuadraILearn</Text>
+          <Text style={styles.headerBrandText}>QuadraLearn</Text>
         </View>
-        <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.wrap}>
-        <View style={styles.contentCard}>
-          <View style={styles.kickerBadge}>
-            <Text style={styles.kicker}>Instant result</Text>
-          </View>
-
-          <View style={styles.headerBlock}>
-            <Text style={styles.title}>Quick Test (60 Seconds)</Text>
-            <View style={styles.subtitleBlock}>
-              <Text style={styles.subtitle}>3 questions • Instant result</Text>
-              <Text style={styles.subtitle}>Real ranking</Text>
-            </View>
-            <View style={styles.microRow}>
-              <Ionicons name="flash-outline" size={14} color="#1D4E89" />
-              <Text style={styles.micro}>No signup required</Text>
-            </View>
-          </View>
-
-          <View style={styles.examCard}>
-            <View style={styles.examHeader}>
-              <Text style={styles.examLabel}>Selected exam</Text>
-              <Link href="/" style={styles.changeLink}>
-                Change
-              </Link>
-            </View>
-            <View style={styles.examNameRow}>
-              <View style={styles.examIconWrap}>
-                <Ionicons name={examIcon(examName)} size={16} color="#1D4E89" />
-              </View>
-              <Text style={styles.examName}>{examName}</Text>
-            </View>
-          </View>
-
-          <Pressable
-            style={styles.primaryButton}
-            onPress={() => {
-              startDemoSession(examName);
-              router.replace("/demo/test?index=0");
-            }}
-          >
-            <Text style={styles.primaryButtonText}>Start Test</Text>
+      <View style={styles.copyBlock}>
+        <View style={styles.titleRow}>
+          <Pressable style={styles.backButton} onPress={() => router.replace("/")}>
+            <Ionicons name="chevron-back" size={18} color="#475569" />
           </Pressable>
-
-          <Link href="/" style={styles.secondaryLink}>
-            Choose another exam
-          </Link>
-
-          <View style={styles.statRow}>
-            <Ionicons name="people-outline" size={14} color="#64748B" />
-            <Text style={styles.statText}>12k+ students attempted today</Text>
-          </View>
+          <Text style={styles.title}>Choose Your Exam</Text>
         </View>
+        <Text style={styles.subtitle}>Choose your exam to start your free test instantly.</Text>
+      </View>
+
+      {state.error ? <Text style={styles.errorText}>{state.error}</Text> : null}
+
+      <View style={styles.list}>
+        {state.exams.map((exam) => {
+          const presentation = getExamPresentation(exam.name);
+          return (
+          <Pressable
+            key={String(exam.id)}
+            onPress={() => router.push({ pathname: "/demo/intro", params: { exam: exam.name, examId: String(exam.id) } })}
+            style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
+          >
+            <View style={styles.thumbWrap}>
+              <Image source={examGenericImage} style={styles.thumbImage} resizeMode="cover" />
+              <View style={[styles.thumbIconWrap, { backgroundColor: presentation.surface }]}>
+                <Ionicons name={presentation.icon} size={14} color={presentation.tone} />
+              </View>
+            </View>
+
+            <View style={styles.cardMiddle}>
+              <Text style={styles.cardTitle}>{exam.name}</Text>
+              <Text style={styles.cardMeta}>{exam.subject_count || 0} subjects available</Text>
+              <View style={styles.tagRow}>
+                <View style={[styles.tagChip, { backgroundColor: presentation.surface }]}>
+                  <Text style={[styles.tagText, { color: presentation.tone }]}>{presentation.tag}</Text>
+                </View>
+                <View style={styles.tagChipNeutral}>
+                  <Text style={styles.tagTextNeutral}>Free Test</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.cardRight}>
+              <Ionicons name="arrow-forward" size={18} color="#0F172A" />
+              <Text style={styles.cardCta}>Start</Text>
+            </View>
+          </Pressable>
+        );
+        })}
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  appHeader: {
-    minHeight: 56,
+  header: {
+    minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-  },
-  headerBack: {
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   headerBrand: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    flex: 1,
-    marginLeft: 4,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerLogoWrap: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -141,157 +153,144 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontSize: 14,
     fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0.1,
   },
-  headerSpacer: {
-    width: 32,
+  copyBlock: {
+    gap: 10,
+    marginTop: 8,
+    paddingHorizontal: 2,
   },
-  wrap: {
-    flex: 1,
-    justifyContent: "center",
-    paddingVertical: 24,
-  },
-  contentCard: {
-    width: "100%",
-    maxWidth: 360,
-    alignSelf: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    padding: 20,
-    gap: 16,
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0px 2px 10px rgba(15, 23, 42, 0.08)" }
-      : {
-          shadowColor: "#0F172A",
-          shadowOpacity: 0.08,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 2 },
-        }),
-    elevation: 2,
-  },
-  kickerBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
-  headerBlock: {
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
-  },
-  kicker: {
-    color: "#1D4E89",
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
   },
   title: {
     color: "#0F172A",
-    fontSize: 27,
-    lineHeight: 33,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-  },
-  subtitleBlock: {
-    gap: 2,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "600",
+    flexShrink: 1,
   },
   subtitle: {
-    color: "#475569",
+    color: "#64748B",
     fontSize: 14,
     lineHeight: 20,
   },
-  microRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  micro: {
-    color: "#1D4E89",
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  examCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    padding: 16,
+  list: {
+    marginTop: 16,
     gap: 12,
   },
-  examHeader: {
+  errorText: {
+    marginTop: 16,
+    color: "#B91C1C",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  card: {
+    width: "100%",
+    minHeight: 112,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  examLabel: {
-    color: "#94A3B8",
-    fontSize: 12,
+  cardPressed: {
+    backgroundColor: "#F1F5F9",
+    transform: [{ scale: 0.98 }],
   },
-  changeLink: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "500",
+  thumbWrap: {
+    width: 84,
+    height: 84,
+    marginRight: 12,
+    borderRadius: 16,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#E2E8F0",
   },
-  examNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+  thumbImage: {
+    width: "100%",
+    height: "100%",
   },
-  examIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
+  thumbIconWrap: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  examName: {
+  cardMiddle: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+    gap: 6,
+  },
+  cardTitle: {
     color: "#0F172A",
-    fontSize: 18,
+    fontSize: 16,
+    lineHeight: 21,
     fontWeight: "600",
   },
-  primaryButton: {
-    minHeight: 52,
+  cardMeta: {
+    color: "#64748B",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  tagChip: {
+    minHeight: 24,
     borderRadius: 999,
-    backgroundColor: "#FF7A00",
+    paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0px 8px 16px rgba(255, 122, 0, 0.18)" }
-      : {
-          shadowColor: "#FF7A00",
-          shadowOpacity: 0.18,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 8 },
-        }),
-    elevation: 4,
   },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+  tagText: {
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "600",
   },
-  secondaryLink: {
-    color: "#475569",
-    fontSize: 14,
-    fontWeight: "500",
-    textAlign: "center",
+  tagChipNeutral: {
+    minHeight: 24,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
   },
-  statRow: {
+  tagTextNeutral: {
+    color: "#475569",
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "600",
+  },
+  cardRight: {
+    marginLeft: 12,
+    minWidth: 64,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    marginTop: 8,
   },
-  statText: {
-    color: "#64748B",
+  cardCta: {
+    color: "#0F172A",
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 16,
+    fontWeight: "600",
   },
 });

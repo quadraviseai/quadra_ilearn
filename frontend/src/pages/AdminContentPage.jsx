@@ -61,6 +61,15 @@ const TEMPLATE_DIFFICULTY_MARKS = {
   5: "Hard",
 };
 
+const EXAM_SET_TYPE_OPTIONS = [
+  { label: "Free exam set", value: "free" },
+  { label: "Registered user mock test set", value: "registered" },
+];
+
+function getExamSetTypeLabel(value) {
+  return EXAM_SET_TYPE_OPTIONS.find((option) => option.value === value)?.label || "Free exam set";
+}
+
 function inferTemplatePattern(template) {
   if (!template) {
     return { patternKey: "inclusion_exclusion", patternValues: {} };
@@ -180,6 +189,7 @@ function AdminContentPage() {
   const [questionJsonImportForm] = Form.useForm();
   const [templateJsonImportForm] = Form.useForm();
   const [generatorForm] = Form.useForm();
+  const [createExamForm] = Form.useForm();
   const questionType = Form.useWatch("question_type", questionForm);
   const conceptFormSubjectId = Form.useWatch("subject", conceptForm);
   const questionExamIds = Form.useWatch("exam_ids", questionForm);
@@ -363,6 +373,29 @@ function AdminContentPage() {
     setExamOpen(false);
     setEditingExam(null);
     examForm.resetFields();
+  };
+
+  const handleCreateExamSectionSubmit = async () => {
+    try {
+      const values = await createExamForm.validateFields();
+      setSaving(true);
+      await apiRequest("/api/admin/exams", {
+        method: "POST",
+        token,
+        body: values,
+      });
+      messageApi.success("Exam created.");
+      createExamForm.resetFields();
+      setActiveSection("exams");
+      loadData();
+    } catch (requestError) {
+      if (requestError?.errorFields) {
+        return;
+      }
+      messageApi.error(requestError.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSubjectModalClose = () => {
@@ -889,7 +922,10 @@ function AdminContentPage() {
   const openExamEditor = (exam = null) => {
     setEditingExam(exam);
     setExamOpen(true);
-    examForm.setFieldsValue({ name: exam?.name || "" });
+    examForm.setFieldsValue({
+      name: exam?.name || "",
+      exam_set_type: exam?.exam_set_type || "free",
+    });
   };
 
   const openQuestionEditor = (question = null) => {
@@ -1347,6 +1383,13 @@ function AdminContentPage() {
   const examColumns = [
     { title: "Name", dataIndex: "name", key: "name", sorter: (left, right) => left.name.localeCompare(right.name) },
     { title: "Slug", dataIndex: "slug", key: "slug", sorter: (left, right) => left.slug.localeCompare(right.slug) },
+    {
+      title: "Type",
+      dataIndex: "exam_set_type",
+      key: "exam_set_type",
+      render: (value) => <Tag color={value === "registered" ? "gold" : "blue"}>{getExamSetTypeLabel(value)}</Tag>,
+      sorter: (left, right) => getExamSetTypeLabel(left.exam_set_type).localeCompare(getExamSetTypeLabel(right.exam_set_type)),
+    },
     { title: "Subjects", dataIndex: "subject_count", key: "subject_count", sorter: (left, right) => left.subject_count - right.subject_count },
     { title: "Chapters", dataIndex: "chapter_count", key: "chapter_count", sorter: (left, right) => left.chapter_count - right.chapter_count },
     { title: "Concepts", dataIndex: "concept_count", key: "concept_count", sorter: (left, right) => left.concept_count - right.concept_count },
@@ -1598,6 +1641,13 @@ function AdminContentPage() {
             </button>
             <button
               type="button"
+              className={`admin-content-sidebar-link${activeSection === "create-exam" ? " is-active" : ""}`}
+              onClick={() => setActiveSection("create-exam")}
+            >
+              Create exam
+            </button>
+            <button
+              type="button"
               className={`admin-content-sidebar-link${activeSection === "subjects" ? " is-active" : ""}`}
               onClick={() => setActiveSection("subjects")}
             >
@@ -1669,6 +1719,50 @@ function AdminContentPage() {
                   pagination={buildPaginationProps("exams", filteredExams.length)}
                   onChange={(pagination) => handleTableChange("exams", pagination)}
                 />
+              </Card>
+            </section>
+          ) : null}
+
+          {activeSection === "create-exam" ? (
+            <section className="admin-content-section">
+              <Card
+                title="Create exam"
+                extra={<Button onClick={() => setActiveSection("exams")}>View all exams</Button>}
+                className="admin-card"
+              >
+                <Form
+                  form={createExamForm}
+                  layout="vertical"
+                  initialValues={{ name: "", exam_set_type: "free" }}
+                  onFinish={handleCreateExamSectionSubmit}
+                >
+                  <Row gutter={16}>
+                    <Col xs={24} md={12}>
+                      <Form.Item name="name" label="Exam name" rules={[{ required: true, message: "Enter the exam name." }]}>
+                        <Input placeholder="JEE Main mock set" />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <Form.Item
+                        name="exam_set_type"
+                        label="Exam set type"
+                        rules={[{ required: true, message: "Select the exam set type." }]}
+                        extra="Choose whether this exam is a free set or a registered-user mock test set."
+                      >
+                        <Select options={EXAM_SET_TYPE_OPTIONS} />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Form.Item label="Slug">
+                    <Input value="Auto-generated from exam name" disabled />
+                  </Form.Item>
+                  <Space>
+                    <Button type="primary" htmlType="submit" loading={saving}>
+                      Create exam
+                    </Button>
+                    <Button onClick={() => createExamForm.resetFields()}>Reset</Button>
+                  </Space>
+                </Form>
               </Card>
             </section>
           ) : null}
@@ -1946,9 +2040,16 @@ function AdminContentPage() {
         onOk={handleExamSubmit}
         confirmLoading={saving}
       >
-        <Form form={examForm} layout="vertical" initialValues={{ name: "" }}>
+        <Form form={examForm} layout="vertical" initialValues={{ name: "", exam_set_type: "free" }}>
           <Form.Item name="name" label="Name" rules={[{ required: true }]}>
             <Input />
+          </Form.Item>
+          <Form.Item
+            name="exam_set_type"
+            label="Exam set type"
+            rules={[{ required: true, message: "Select the exam set type." }]}
+          >
+            <Select options={EXAM_SET_TYPE_OPTIONS} />
           </Form.Item>
           <Form.Item label="Slug">
             <Input value="Auto-generated from exam name" disabled />

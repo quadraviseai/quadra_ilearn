@@ -102,6 +102,16 @@ class InternalAdminApiTests(APITestCase):
         subject = Subject.objects.get(id=subject_response.data["id"])
         self.assertEqual(list(subject.exams.values_list("name", flat=True)), ["NEET"])
 
+    def test_admin_can_create_exam_with_exam_set_type(self):
+        response = self.client.post(
+            reverse("admin-exams"),
+            {"name": "JEE Free Set", "exam_set_type": Exam.ExamSetType.REGISTERED},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["exam_set_type"], Exam.ExamSetType.REGISTERED)
+        self.assertEqual(Exam.objects.get(id=response.data["id"]).exam_set_type, Exam.ExamSetType.REGISTERED)
+
     def test_admin_auto_generates_subject_and_concept_slugs(self):
         subject_response = self.client.post(
             reverse("admin-subjects"),

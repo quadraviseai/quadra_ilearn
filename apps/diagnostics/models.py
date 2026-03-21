@@ -41,9 +41,14 @@ class Chapter(models.Model):
 
 
 class Exam(models.Model):
+    class ExamSetType(models.TextChoices):
+        FREE = "free", "Free exam set"
+        REGISTERED = "registered", "Registered user mock test set"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=120, unique=True)
     slug = models.SlugField(max_length=140, unique=True)
+    exam_set_type = models.CharField(max_length=20, choices=ExamSetType.choices, default=ExamSetType.FREE)
     is_active = models.BooleanField(default=True)
     retest_price = models.DecimalField(max_digits=8, decimal_places=2, default="10.00")
     created_at = models.DateTimeField(auto_now_add=True)

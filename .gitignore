@@ -6,6 +6,16 @@ staticfiles/
 .playwright-cli/
 .expo/
 mobile/.expo/
+mobile/.gradle/
+mobile/.gradle-local/
+mobile/.gradle-local-2/
+mobile/dist/
+mobile/local-jdk/
+mobile/release/
+.vscode/
+*.tar.gz
+*.zip
+*.keystore
 node_modules/
 mobile/node_modules/
 *.log
