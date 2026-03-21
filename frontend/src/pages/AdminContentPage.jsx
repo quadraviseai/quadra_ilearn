@@ -66,8 +66,32 @@ const EXAM_SET_TYPE_OPTIONS = [
   { label: "Registered user mock test set", value: "registered" },
 ];
 
+const ADMIN_EXAM_TYPE_OPTIONS = [
+  { label: "JEE", value: "jee" },
+  { label: "NEET", value: "neet" },
+  { label: "CBSE Class 10", value: "cbse_10" },
+  { label: "CBSE Class 12", value: "cbse_12" },
+];
+
 function getExamSetTypeLabel(value) {
   return EXAM_SET_TYPE_OPTIONS.find((option) => option.value === value)?.label || "Free exam set";
+}
+
+function inferAdminExamType(examName) {
+  const value = String(examName || "").toLowerCase();
+  if (value.includes("jee")) {
+    return "jee";
+  }
+  if (value.includes("neet")) {
+    return "neet";
+  }
+  if (value.includes("class 10") || value.includes("10")) {
+    return "cbse_10";
+  }
+  if (value.includes("class 12") || value.includes("12")) {
+    return "cbse_12";
+  }
+  return "";
 }
 
 const SMART_IMPORT_SAMPLE_JSON = JSON.stringify(
@@ -225,6 +249,7 @@ function AdminContentPage() {
   const [questionJsonImportForm] = Form.useForm();
   const [smartQuestionImportForm] = Form.useForm();
   const [smartQuestionInlineForm] = Form.useForm();
+  const [examUploadForm] = Form.useForm();
   const [templateJsonImportForm] = Form.useForm();
   const [generatorForm] = Form.useForm();
   const [createExamForm] = Form.useForm();
@@ -238,6 +263,7 @@ function AdminContentPage() {
   const bulkSubjectId = Form.useWatch("subject_id", bulkUploadForm);
   const bulkChapterId = Form.useWatch("chapter_id", bulkUploadForm);
   const bulkConceptId = Form.useWatch("concept_id", bulkUploadForm);
+  const examUploadType = Form.useWatch("exam_family", examUploadForm);
   const chapterBulkSubjectId = Form.useWatch("subject_id", chapterBulkUploadForm);
   const conceptBulkExamIds = Form.useWatch("exam_ids", conceptBulkUploadForm);
   const conceptBulkSubjectId = Form.useWatch("subject_id", conceptBulkUploadForm);
@@ -826,6 +852,28 @@ function AdminContentPage() {
     }
   };
 
+  const handleExamUploadSubmit = async () => {
+    try {
+      const values = await examUploadForm.validateFields();
+      const completed = await submitSmartQuestionImport(values);
+      if (!completed) {
+        return;
+      }
+      examUploadForm.resetFields();
+      examUploadForm.setFieldsValue({ json_text: SMART_IMPORT_SAMPLE_JSON, exam_family: values.exam_family });
+      loadData();
+    } catch (requestError) {
+      if (requestError?.errorFields) {
+        return;
+      }
+      if (requestError instanceof SyntaxError) {
+        messageApi.error("The supplied JSON is not valid.");
+        return;
+      }
+      messageApi.error(requestError.message || "Exam upload failed.");
+    }
+  };
+
   const handleTemplateJsonImportSubmit = async () => {
     try {
       const values = await templateJsonImportForm.validateFields();
@@ -1104,6 +1152,12 @@ function AdminContentPage() {
     value: concept.id,
   }));
   const examOptions = exams.map((exam) => ({ label: exam.name, value: exam.id }));
+  const examUploadOptions = examOptions.filter((exam) => {
+    if (!examUploadType) {
+      return true;
+    }
+    return inferAdminExamType(exam.label) === examUploadType;
+  });
   const selectedQuestionSubject = subjects.find((subject) => subject.id === questionSubjectId);
   const selectedQuestionChapter = chapters.find((chapter) => chapter.id === questionChapterId);
   const selectedQuestionConcept = concepts.find((concept) => concept.id === questionConceptId);
@@ -1815,6 +1869,13 @@ function AdminContentPage() {
             >
               Smart import
             </button>
+            <button
+              type="button"
+              className={`admin-content-sidebar-link${activeSection === "exam-upload" ? " is-active" : ""}`}
+              onClick={() => setActiveSection("exam-upload")}
+            >
+              Exam upload
+            </button>
           </nav>
         </aside>
 
@@ -2221,6 +2282,88 @@ function AdminContentPage() {
                     </Space>
                   </Form>
                 </Space>
+              </Card>
+            </section>
+          ) : null}
+
+          {activeSection === "exam-upload" ? (
+            <section className="admin-content-section">
+              <Card
+                title="Exam upload"
+                extra={<Button onClick={() => setActiveSection("questions")}>View question bank</Button>}
+                className="admin-card"
+              >
+                <Form
+                  form={examUploadForm}
+                  layout="vertical"
+                  initialValues={{ json_text: SMART_IMPORT_SAMPLE_JSON }}
+                >
+                  <Row gutter={16}>
+                    <Col xs={24} md={8}>
+                      <Form.Item
+                        name="exam_family"
+                        label="Exam type"
+                        rules={[{ required: true, message: "Select an exam type." }]}
+                        extra="Pick the broad exam category first so the exam list stays short."
+                      >
+                        <Select
+                          showSearch
+                          allowClear
+                          optionFilterProp="label"
+                          options={ADMIN_EXAM_TYPE_OPTIONS}
+                          placeholder="Select exam type"
+                          onChange={() => examUploadForm.setFieldValue("exam_id", undefined)}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} md={16}>
+                      <Form.Item
+                        name="exam_id"
+                        label="Exam"
+                        rules={[{ required: true, message: "Select the exam." }]}
+                        extra="After exam creation, select the exact exam here and upload or paste the JSON once."
+                      >
+                        <Select
+                          showSearch
+                          allowClear
+                          optionFilterProp="label"
+                          options={examUploadOptions}
+                          placeholder="Select exam"
+                          disabled={!examUploadType}
+                        />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Form.Item
+                    name="import_file"
+                    label="Upload JSON file"
+                    valuePropName="fileList"
+                    getValueFromEvent={(event) => (Array.isArray(event) ? event : event?.fileList)}
+                    extra="Optional. Use this if the JSON already exists as a file."
+                  >
+                    <Upload accept=".json,application/json" beforeUpload={() => false} maxCount={1}>
+                      <Button>Select JSON file</Button>
+                    </Upload>
+                  </Form.Item>
+                  <Form.Item
+                    name="json_text"
+                    label="Paste JSON"
+                    extra="Optional if you upload a file above. One of upload or paste is enough."
+                  >
+                    <Input.TextArea className="admin-json-editor" rows={18} />
+                  </Form.Item>
+                  <Space wrap>
+                    <Button type="primary" onClick={handleExamUploadSubmit} loading={saving}>
+                      Upload questions
+                    </Button>
+                    <Button onClick={() => examUploadForm.setFieldsValue({ json_text: SMART_IMPORT_SAMPLE_JSON })}>
+                      Load sample
+                    </Button>
+                    <Button onClick={() => examUploadForm.resetFields()}>
+                      Clear
+                    </Button>
+                  </Space>
+                </Form>
               </Card>
             </section>
           ) : null}
