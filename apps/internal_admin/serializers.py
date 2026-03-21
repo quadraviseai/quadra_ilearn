@@ -1062,7 +1062,8 @@ class AdminQuestionSmartImportItemSerializer(serializers.Serializer):
 
 
 class AdminQuestionSmartImportSerializer(serializers.Serializer):
-    exam_name = serializers.CharField(max_length=120)
+    exam_id = serializers.UUIDField(required=False, allow_null=True)
+    exam_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
     exam_set_type = serializers.ChoiceField(choices=Exam.ExamSetType.choices, required=False, default=Exam.ExamSetType.FREE)
     subject_name = serializers.CharField(max_length=100)
     chapter_name = serializers.CharField(max_length=150)
@@ -1076,8 +1077,6 @@ class AdminQuestionSmartImportSerializer(serializers.Serializer):
 
     def validate_exam_name(self, value):
         normalized = " ".join((value or "").split())
-        if not normalized:
-            raise serializers.ValidationError("Exam name is required.")
         return normalized
 
     def validate_subject_name(self, value):
@@ -1105,7 +1104,20 @@ class AdminQuestionSmartImportSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        existing_exam = Exam.objects.filter(name__iexact=attrs["exam_name"]).first()
+        exam = None
+        exam_id = attrs.get("exam_id")
+        exam_name = attrs.get("exam_name") or ""
+
+        if exam_id:
+            exam = Exam.objects.filter(id=exam_id).first()
+            if not exam:
+                raise serializers.ValidationError({"exam_id": "Exam not found."})
+            attrs["exam_name"] = exam.name
+            attrs["exam_set_type"] = exam.exam_set_type
+        elif not exam_name:
+            raise serializers.ValidationError({"exam_name": "Select an existing exam or provide exam_name."})
+
+        existing_exam = exam or Exam.objects.filter(name__iexact=attrs["exam_name"]).first()
         if existing_exam and existing_exam.exam_set_type != attrs["exam_set_type"]:
             raise serializers.ValidationError(
                 {

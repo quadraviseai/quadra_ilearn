@@ -70,6 +70,41 @@ function getExamSetTypeLabel(value) {
   return EXAM_SET_TYPE_OPTIONS.find((option) => option.value === value)?.label || "Free exam set";
 }
 
+const SMART_IMPORT_SAMPLE_JSON = JSON.stringify(
+  {
+    subject_name: "Physics",
+    chapter_name: "Kinematics",
+    concept_name: "Motion in a Straight Line",
+    questions: [
+      {
+        question_type: "mcq_single",
+        prompt: "A particle starts from rest with constant acceleration. Which relation gives final velocity?",
+        explanation: "Use v = u + at for constant acceleration.",
+        difficulty_level: 2,
+        status: "active",
+        options: [
+          { option_text: "v = u + at", is_correct: true, display_order: 1 },
+          { option_text: "s = ut + 1/2at^2", is_correct: false, display_order: 2 },
+        ],
+      },
+      {
+        concept_name: "Relative Motion",
+        question_type: "mcq_single",
+        prompt: "Relative speed of two bodies moving opposite is:",
+        explanation: "Add magnitudes when directions are opposite.",
+        difficulty_level: 1,
+        status: "draft",
+        options: [
+          { option_text: "Sum of speeds", is_correct: true, display_order: 1 },
+          { option_text: "Difference of speeds", is_correct: false, display_order: 2 },
+        ],
+      },
+    ],
+  },
+  null,
+  2,
+);
+
 function inferTemplatePattern(template) {
   if (!template) {
     return { patternKey: "inclusion_exclusion", patternValues: {} };
@@ -189,6 +224,7 @@ function AdminContentPage() {
   const [bulkUploadForm] = Form.useForm();
   const [questionJsonImportForm] = Form.useForm();
   const [smartQuestionImportForm] = Form.useForm();
+  const [smartQuestionInlineForm] = Form.useForm();
   const [templateJsonImportForm] = Form.useForm();
   const [generatorForm] = Form.useForm();
   const [createExamForm] = Form.useForm();
@@ -714,21 +750,23 @@ function AdminContentPage() {
     }
   };
 
-  const handleSmartQuestionImportSubmit = async () => {
+  const submitSmartQuestionImport = async (values) => {
+    const file = values.import_file?.[0]?.originFileObj;
+    const jsonText = String(values.json_text || "").trim();
+    let payload;
+    if (jsonText) {
+      payload = JSON.parse(jsonText);
+    } else if (file) {
+      payload = JSON.parse(await file.text());
+    } else {
+      messageApi.error("Upload a JSON file or paste JSON content.");
+      return;
+    }
+    if (values.exam_id) {
+      payload.exam_id = values.exam_id;
+    }
+    setSaving(true);
     try {
-      const values = await smartQuestionImportForm.validateFields();
-      const file = values.import_file?.[0]?.originFileObj;
-      const jsonText = String(values.json_text || "").trim();
-      let payload;
-      if (jsonText) {
-        payload = JSON.parse(jsonText);
-      } else if (file) {
-        payload = JSON.parse(await file.text());
-      } else {
-        messageApi.error("Upload a JSON file or paste JSON content.");
-        return;
-      }
-      setSaving(true);
       const response = await apiRequest("/api/admin/questions/smart-import", {
         method: "POST",
         token,
@@ -739,6 +777,19 @@ function AdminContentPage() {
           ? `Imported ${response.count} questions and updated the exam hierarchy.`
           : "No questions were imported.",
       );
+      return true;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSmartQuestionImportSubmit = async () => {
+    try {
+      const values = await smartQuestionImportForm.validateFields();
+      const completed = await submitSmartQuestionImport(values);
+      if (!completed) {
+        return;
+      }
       handleSmartQuestionImportClose();
       loadData();
     } catch (requestError) {
@@ -750,8 +801,28 @@ function AdminContentPage() {
         return;
       }
       messageApi.error(requestError.message || "Smart question import failed.");
-    } finally {
-      setSaving(false);
+    }
+  };
+
+  const handleSmartQuestionInlineSubmit = async () => {
+    try {
+      const values = await smartQuestionInlineForm.validateFields();
+      const completed = await submitSmartQuestionImport(values);
+      if (!completed) {
+        return;
+      }
+      smartQuestionInlineForm.resetFields();
+      smartQuestionInlineForm.setFieldsValue({ json_text: SMART_IMPORT_SAMPLE_JSON });
+      loadData();
+    } catch (requestError) {
+      if (requestError?.errorFields) {
+        return;
+      }
+      if (requestError instanceof SyntaxError) {
+        messageApi.error("The supplied JSON is not valid.");
+        return;
+      }
+      messageApi.error(requestError.message || "Smart question import failed.");
     }
   };
 
@@ -1398,16 +1469,20 @@ function AdminContentPage() {
     if (!records.length) {
       return;
     }
-    Modal.confirm({
+    const confirmModal = Modal.confirm({
       title: `Delete ${records.length} ${sectionLabels[section]}?`,
       content:
         searchValues[section]
           ? "This deletes all items in the current filtered result set."
           : "This deletes every item currently loaded in this section.",
       okText: "Delete all",
-      okButtonProps: { danger: true, loading: bulkDeletingSection === section },
+      okButtonProps: { danger: true },
       cancelText: "Cancel",
       onOk: async () => {
+        confirmModal.update({
+          okButtonProps: { danger: true, loading: true },
+          cancelButtonProps: { disabled: true },
+        });
         setBulkDeletingSection(section);
         try {
           for (const record of records) {
@@ -1419,6 +1494,10 @@ function AdminContentPage() {
           messageApi.success(`Deleted ${records.length} ${sectionLabels[section]}.`);
           await loadData();
         } catch (requestError) {
+          confirmModal.update({
+            okButtonProps: { danger: true, loading: false },
+            cancelButtonProps: { disabled: false },
+          });
           messageApi.error(requestError.message);
           throw requestError;
         } finally {
@@ -2089,7 +2168,7 @@ function AdminContentPage() {
           {activeSection === "smart-import" ? (
             <section className="admin-content-section">
               <Card
-                title="Smart question import"
+                title="Upload exam JSON"
                 extra={
                   <Space wrap>
                     <Button onClick={() => setSmartQuestionImportOpen(true)}>Upload JSON</Button>
@@ -2100,51 +2179,47 @@ function AdminContentPage() {
               >
                 <Space direction="vertical" size="large" style={{ width: "100%" }}>
                   <p style={{ margin: 0 }}>
-                    Upload one JSON payload for one exam. The importer will reuse the existing exam if the name and
-                    <code> exam_set_type </code>
-                    match, or create the missing exam, subject, chapter, and concept automatically before saving the questions.
+                    After creating an exam, use one JSON upload here. Select the existing exam and the importer will
+                    create the missing subject, chapter, and concept automatically before saving the questions.
                   </p>
-                  <Input.TextArea
-                    className="admin-json-editor"
-                    rows={18}
-                    readOnly
-                    value={JSON.stringify(
-                      {
-                        exam_name: "JEE Main Physics Free",
-                        exam_set_type: "free",
-                        subject_name: "Physics",
-                        chapter_name: "Kinematics",
-                        concept_name: "Motion in a Straight Line",
-                        questions: [
-                          {
-                            question_type: "mcq_single",
-                            prompt: "A particle starts from rest with constant acceleration. Which relation gives final velocity?",
-                            explanation: "Use v = u + at for constant acceleration.",
-                            difficulty_level: 2,
-                            status: "active",
-                            options: [
-                              { option_text: "v = u + at", is_correct: true, display_order: 1 },
-                              { option_text: "s = ut + 1/2at^2", is_correct: false, display_order: 2 },
-                            ],
-                          },
-                          {
-                            concept_name: "Relative Motion",
-                            question_type: "mcq_single",
-                            prompt: "Relative speed of two bodies moving opposite is:",
-                            explanation: "Add magnitudes when directions are opposite.",
-                            difficulty_level: 1,
-                            status: "draft",
-                            options: [
-                              { option_text: "Sum of speeds", is_correct: true, display_order: 1 },
-                              { option_text: "Difference of speeds", is_correct: false, display_order: 2 },
-                            ],
-                          },
-                        ],
-                      },
-                      null,
-                      2,
-                    )}
-                  />
+                  <Form
+                    form={smartQuestionInlineForm}
+                    layout="vertical"
+                    initialValues={{ json_text: SMART_IMPORT_SAMPLE_JSON }}
+                  >
+                    <Form.Item
+                      name="exam_id"
+                      label="Existing exam"
+                      extra="Create the exam first, then select it here so the pasted JSON attaches everything to that exam."
+                    >
+                      <Select
+                        showSearch
+                        allowClear
+                        optionFilterProp="label"
+                        options={examOptions}
+                        placeholder="Select an existing exam"
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="json_text"
+                      label="Paste JSON"
+                      rules={[{ required: true, message: "Paste the JSON payload." }]}
+                      extra="You can paste the full JSON here directly. File upload is still available from the Upload JSON button."
+                    >
+                      <Input.TextArea className="admin-json-editor" rows={18} />
+                    </Form.Item>
+                    <Space wrap>
+                      <Button type="primary" onClick={handleSmartQuestionInlineSubmit} loading={saving}>
+                        Import pasted JSON
+                      </Button>
+                      <Button onClick={() => smartQuestionInlineForm.setFieldsValue({ json_text: SMART_IMPORT_SAMPLE_JSON })}>
+                        Load sample
+                      </Button>
+                      <Button onClick={() => smartQuestionInlineForm.resetFields()}>
+                        Clear
+                      </Button>
+                    </Space>
+                  </Form>
                 </Space>
               </Card>
             </section>
@@ -2423,7 +2498,7 @@ function AdminContentPage() {
       </Modal>
 
       <Modal
-        title="Smart import questions"
+        title="Upload exam JSON"
         open={smartQuestionImportOpen}
         onCancel={handleSmartQuestionImportClose}
         onOk={handleSmartQuestionImportSubmit}
@@ -2432,11 +2507,24 @@ function AdminContentPage() {
       >
         <Form form={smartQuestionImportForm} layout="vertical">
           <Form.Item
+            name="exam_id"
+            label="Existing exam"
+            extra="Recommended. Create the exam first, then select it here so the upload attaches all content to that exam."
+          >
+            <Select
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              options={examOptions}
+              placeholder="Select an existing exam"
+            />
+          </Form.Item>
+          <Form.Item
             name="import_file"
             label="JSON file"
             valuePropName="fileList"
             getValueFromEvent={(event) => (Array.isArray(event) ? event : event?.fileList)}
-            extra="Optional if you paste JSON below. One file should contain one exam, one subject, one chapter, one or more concepts, and all questions for that exam."
+            extra="Optional if you paste JSON below. One file should contain one subject, one chapter, one or more concepts, and all questions for the selected exam."
           >
             <Upload accept=".json,application/json" beforeUpload={() => false} maxCount={1}>
               <Button>Select JSON file</Button>
@@ -2445,7 +2533,7 @@ function AdminContentPage() {
           <Form.Item
             name="json_text"
             label="Or paste JSON"
-            extra="exam_set_type is required for safe exam matching. If an exam with the same name already exists under a different exam_set_type, the import will stop."
+            extra="If you do not select an existing exam above, then the JSON must include exam_name and exam_set_type."
           >
             <Input.TextArea rows={12} className="admin-json-editor" />
           </Form.Item>
@@ -2455,40 +2543,7 @@ function AdminContentPage() {
               rows={18}
               readOnly
               value={JSON.stringify(
-                {
-                  exam_name: "JEE Main Physics Free",
-                  exam_set_type: "free",
-                  subject_name: "Physics",
-                  chapter_name: "Kinematics",
-                  concept_name: "Motion in a Straight Line",
-                  questions: [
-                    {
-                      question_type: "mcq_single",
-                      prompt: "A particle starts from rest with constant acceleration. Which relation gives final velocity?",
-                      explanation: "Use v = u + at for constant acceleration.",
-                      difficulty_level: 2,
-                      status: "active",
-                      options: [
-                        { option_text: "v = u + at", is_correct: true, display_order: 1 },
-                        { option_text: "s = ut + 1/2at^2", is_correct: false, display_order: 2 },
-                      ],
-                    },
-                    {
-                      concept_name: "Relative Motion",
-                      question_type: "mcq_single",
-                      prompt: "Relative speed of two bodies moving opposite is:",
-                      explanation: "Add magnitudes when directions are opposite.",
-                      difficulty_level: 1,
-                      status: "draft",
-                      options: [
-                        { option_text: "Sum of speeds", is_correct: true, display_order: 1 },
-                        { option_text: "Difference of speeds", is_correct: false, display_order: 2 },
-                      ],
-                    },
-                  ],
-                },
-                null,
-                2,
+                SMART_IMPORT_SAMPLE_JSON,
               )}
             />
           </Form.Item>

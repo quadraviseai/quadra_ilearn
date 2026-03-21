@@ -412,6 +412,38 @@ class InternalAdminApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("exam_name", response.data)
 
+    def test_admin_can_smart_import_questions_using_existing_exam_id(self):
+        exam = Exam.objects.create(name="NEET Practice", slug="neet-practice", exam_set_type=Exam.ExamSetType.REGISTERED)
+
+        response = self.client.post(
+            reverse("admin-question-smart-import"),
+            {
+                "exam_id": str(exam.id),
+                "subject_name": "Biology",
+                "chapter_name": "Cell",
+                "concept_name": "Cell Structure",
+                "questions": [
+                    {
+                        "question_type": Question.QuestionType.MCQ_SINGLE,
+                        "prompt": "Which organelle is known as the powerhouse of the cell?",
+                        "options": [
+                            {"option_text": "Mitochondria", "is_correct": True, "display_order": 1},
+                            {"option_text": "Ribosome", "is_correct": False, "display_order": 2},
+                        ],
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["count"], 1)
+        subject = Subject.objects.get(name="Biology")
+        chapter = Chapter.objects.get(subject=subject, name="Cell")
+        concept = Concept.objects.get(subject=subject, chapter=chapter, name="Cell Structure")
+        question = Question.objects.get(concept=concept)
+        self.assertTrue(question.exams.filter(id=exam.id).exists())
+
     def test_admin_can_import_templates_from_json(self):
         subject = Subject.objects.create(name="Math", slug="math")
         exam = Exam.objects.create(name="JEE Main", slug="jee-main")
