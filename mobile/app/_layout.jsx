@@ -33,9 +33,10 @@ function AppNavigator() {
     const inStudentGroup = segments[0] === "(student)";
     const inAdminGroup = segments[0] === "(admin)";
     const inDemoRoute = segments[0] === "demo";
+    const inOAuthRedirect = segments[0] === "oauthredirect";
     const inPublicLanding = segments.length === 0;
 
-    if (!isAuthenticated && !inAuthGroup && !inPublicLanding && !inDemoRoute) {
+    if (!isAuthenticated && !inAuthGroup && !inPublicLanding && !inDemoRoute && !inOAuthRedirect) {
       router.replace("/(auth)/login");
       return;
     }

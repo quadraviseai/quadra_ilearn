@@ -148,6 +148,40 @@ class AuthApiTests(APITestCase):
 
     @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
     @patch("apps.users.serializers.verify_google_id_token")
+    def test_google_register_logs_in_existing_google_user(self, mocked_verify_google_id_token):
+        user = get_user_model().objects.create_user(
+            email="existing-google@example.com",
+            password=None,
+            role="student",
+            auth_provider="google",
+            google_subject="google-sub-existing",
+            is_verified=True,
+        )
+        StudentProfile.objects.create(user=user, full_name="Existing Google User", class_name="8")
+        mocked_verify_google_id_token.return_value = {
+            "email": user.email,
+            "email_verified": True,
+            "name": "Existing Google User",
+            "sub": "google-sub-existing",
+        }
+
+        response = self.client.post(
+            "/api/auth/google",
+            {
+                "credential": "valid-token",
+                "intent": "register",
+                "role": "student",
+                "class_name": "10",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["email"], user.email)
+        self.assertEqual(get_user_model().objects.filter(email=user.email).count(), 1)
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id")
+    @patch("apps.users.serializers.verify_google_id_token")
     def test_google_login_auto_registers_new_google_user(self, mocked_verify_google_id_token):
         mocked_verify_google_id_token.return_value = {
             "email": "new-google@example.com",

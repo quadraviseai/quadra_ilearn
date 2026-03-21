@@ -170,7 +170,6 @@ class GoogleAuthSerializer(serializers.Serializer):
         "google_invalid": "Google sign-in could not be verified.",
         "google_email": "Google account email is unavailable or not verified.",
         "login_provider_mismatch": "This account was not registered with Google. Use email/password login instead.",
-        "register_exists_google": "This Google account is already registered. Use Google login instead.",
         "register_exists_email": "An account with this email already exists. Use email/password login instead.",
         "google_subject_mismatch": "This Google account does not match the registered Google user.",
     }
@@ -203,15 +202,8 @@ class GoogleAuthSerializer(serializers.Serializer):
 
         google_subject = (google_payload.get("sub") or "").strip()
         user = User.objects.filter(email__iexact=email).first()
-        if attrs["intent"] == "login":
-            if not user:
-                attrs["role"] = User.Role.STUDENT
-                attrs["google_payload"] = google_payload
-                attrs["google_subject"] = google_subject or None
-                attrs["email"] = email
-                attrs["name"] = (google_payload.get("name") or email.split("@")[0]).strip()
-                attrs["auto_registered"] = True
-                return attrs
+
+        if user:
             if not user.is_active:
                 raise serializers.ValidationError({"detail": "This account is inactive."})
             if user.auth_provider != User.AuthProvider.GOOGLE:
@@ -221,11 +213,17 @@ class GoogleAuthSerializer(serializers.Serializer):
             attrs["user"] = user
             return attrs
 
-        if user:
-            if user.auth_provider == User.AuthProvider.GOOGLE:
-                raise serializers.ValidationError({"detail": self.error_messages["register_exists_google"]})
-            raise serializers.ValidationError({"detail": self.error_messages["register_exists_email"]})
+        if attrs["intent"] == "login":
+            attrs["role"] = User.Role.STUDENT
+            attrs["google_payload"] = google_payload
+            attrs["google_subject"] = google_subject or None
+            attrs["email"] = email
+            attrs["name"] = (google_payload.get("name") or email.split("@")[0]).strip()
+            attrs["auto_registered"] = True
+            return attrs
 
+        requested_role = attrs.get("role")
+        attrs["role"] = requested_role or User.Role.STUDENT
         attrs["google_payload"] = google_payload
         attrs["google_subject"] = google_subject or None
         attrs["email"] = email
