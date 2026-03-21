@@ -66,32 +66,8 @@ const EXAM_SET_TYPE_OPTIONS = [
   { label: "Registered user mock test set", value: "registered" },
 ];
 
-const ADMIN_EXAM_TYPE_OPTIONS = [
-  { label: "JEE", value: "jee" },
-  { label: "NEET", value: "neet" },
-  { label: "CBSE Class 10", value: "cbse_10" },
-  { label: "CBSE Class 12", value: "cbse_12" },
-];
-
 function getExamSetTypeLabel(value) {
   return EXAM_SET_TYPE_OPTIONS.find((option) => option.value === value)?.label || "Free exam set";
-}
-
-function inferAdminExamType(examName) {
-  const value = String(examName || "").toLowerCase();
-  if (value.includes("jee")) {
-    return "jee";
-  }
-  if (value.includes("neet")) {
-    return "neet";
-  }
-  if (value.includes("class 10") || value.includes("10")) {
-    return "cbse_10";
-  }
-  if (value.includes("class 12") || value.includes("12")) {
-    return "cbse_12";
-  }
-  return "";
 }
 
 const SMART_IMPORT_SAMPLE_JSON = JSON.stringify(
@@ -263,7 +239,7 @@ function AdminContentPage() {
   const bulkSubjectId = Form.useWatch("subject_id", bulkUploadForm);
   const bulkChapterId = Form.useWatch("chapter_id", bulkUploadForm);
   const bulkConceptId = Form.useWatch("concept_id", bulkUploadForm);
-  const examUploadType = Form.useWatch("exam_family", examUploadForm);
+  const examUploadExamId = Form.useWatch("exam_id", examUploadForm);
   const chapterBulkSubjectId = Form.useWatch("subject_id", chapterBulkUploadForm);
   const conceptBulkExamIds = Form.useWatch("exam_ids", conceptBulkUploadForm);
   const conceptBulkSubjectId = Form.useWatch("subject_id", conceptBulkUploadForm);
@@ -855,12 +831,16 @@ function AdminContentPage() {
   const handleExamUploadSubmit = async () => {
     try {
       const values = await examUploadForm.validateFields();
+      if (selectedExamUpload && values.exam_set_type && selectedExamUpload.exam_set_type !== values.exam_set_type) {
+        messageApi.error("The selected exam does not match the selected exam type.");
+        return;
+      }
       const completed = await submitSmartQuestionImport(values);
       if (!completed) {
         return;
       }
       examUploadForm.resetFields();
-      examUploadForm.setFieldsValue({ json_text: SMART_IMPORT_SAMPLE_JSON, exam_family: values.exam_family });
+      examUploadForm.setFieldsValue({ json_text: SMART_IMPORT_SAMPLE_JSON });
       loadData();
     } catch (requestError) {
       if (requestError?.errorFields) {
@@ -1152,12 +1132,7 @@ function AdminContentPage() {
     value: concept.id,
   }));
   const examOptions = exams.map((exam) => ({ label: exam.name, value: exam.id }));
-  const examUploadOptions = examOptions.filter((exam) => {
-    if (!examUploadType) {
-      return true;
-    }
-    return inferAdminExamType(exam.label) === examUploadType;
-  });
+  const selectedExamUpload = exams.find((exam) => exam.id === examUploadExamId);
   const selectedQuestionSubject = subjects.find((subject) => subject.id === questionSubjectId);
   const selectedQuestionChapter = chapters.find((chapter) => chapter.id === questionChapterId);
   const selectedQuestionConcept = concepts.find((concept) => concept.id === questionConceptId);
@@ -2296,40 +2271,41 @@ function AdminContentPage() {
                 <Form
                   form={examUploadForm}
                   layout="vertical"
-                  initialValues={{ json_text: SMART_IMPORT_SAMPLE_JSON }}
+                  initialValues={{ exam_set_type: "free", json_text: SMART_IMPORT_SAMPLE_JSON }}
                 >
                   <Row gutter={16}>
-                    <Col xs={24} md={8}>
-                      <Form.Item
-                        name="exam_family"
-                        label="Exam type"
-                        rules={[{ required: true, message: "Select an exam type." }]}
-                        extra="Pick the broad exam category first so the exam list stays short."
-                      >
-                        <Select
-                          showSearch
-                          allowClear
-                          optionFilterProp="label"
-                          options={ADMIN_EXAM_TYPE_OPTIONS}
-                          placeholder="Select exam type"
-                          onChange={() => examUploadForm.setFieldValue("exam_id", undefined)}
-                        />
-                      </Form.Item>
-                    </Col>
                     <Col xs={24} md={16}>
                       <Form.Item
                         name="exam_id"
                         label="Exam"
                         rules={[{ required: true, message: "Select the exam." }]}
-                        extra="After exam creation, select the exact exam here and upload or paste the JSON once."
+                        extra="Pick the exam first. The upload will attach all imported questions to this exam."
                       >
                         <Select
                           showSearch
                           allowClear
                           optionFilterProp="label"
-                          options={examUploadOptions}
+                          options={examOptions}
                           placeholder="Select exam"
-                          disabled={!examUploadType}
+                          onChange={(value) => {
+                            const nextExam = exams.find((exam) => exam.id === value);
+                            if (nextExam) {
+                              examUploadForm.setFieldValue("exam_set_type", nextExam.exam_set_type);
+                            }
+                          }}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Form.Item
+                        name="exam_set_type"
+                        label="Exam type"
+                        rules={[{ required: true, message: "Select the exam type." }]}
+                        extra="Only the real exam-set types are supported here."
+                      >
+                        <Select
+                          options={EXAM_SET_TYPE_OPTIONS}
+                          placeholder="Select exam type"
                         />
                       </Form.Item>
                     </Col>
