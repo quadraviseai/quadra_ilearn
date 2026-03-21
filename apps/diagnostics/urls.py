@@ -8,6 +8,7 @@ from apps.diagnostics.views import (
     DiagnosticAttemptSubmitView,
     EligibilityView,
     ExamListView,
+    FreeExamSetDetailView,
     ExamSubjectListView,
     LatestReportView,
     PaymentUnlockView,
@@ -21,6 +22,7 @@ from apps.diagnostics.views import (
 
 urlpatterns = [
     path("exams", ExamListView.as_view(), name="diagnostic-exams"),
+    path("exams/<uuid:exam_id>/free-set", FreeExamSetDetailView.as_view(), name="diagnostic-free-exam-set"),
     path("exams/<uuid:exam_id>/subjects", ExamSubjectListView.as_view(), name="diagnostic-exam-subjects"),
     path("subjects", SubjectListView.as_view(), name="diagnostic-subjects"),
     path("eligibility", EligibilityView.as_view(), name="diagnostic-eligibility"),

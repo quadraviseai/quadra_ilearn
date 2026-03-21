@@ -6,12 +6,13 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.diagnostics.models import Exam, Subject, TestAttempt, TestAttemptQuestion, WeakTopicAIReview
+from apps.diagnostics.models import Exam, Question, Subject, TestAttempt, TestAttemptQuestion, WeakTopicAIReview
 from apps.diagnostics.permissions import IsStudent
 from apps.diagnostics.serializers import (
     AttemptQuestionSerializer,
     EligibilityQuerySerializer,
     ExamListSerializer,
+    FreeExamQuestionSerializer,
     PaymentRecordSerializer,
     PaymentUnlockSerializer,
     SaveAnswerSerializer,
@@ -44,6 +45,31 @@ class ExamListView(APIView):
         exams = Exam.objects.filter(is_active=True).prefetch_related("subjects")
         serializer = ExamListSerializer(exams, many=True)
         return Response(serializer.data)
+
+
+class FreeExamSetDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, exam_id):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+            is_active=True,
+            exam_set_type=Exam.ExamSetType.FREE,
+        )
+        questions = (
+            Question.objects.filter(exams=exam, status=Question.Status.ACTIVE)
+            .select_related("concept")
+            .prefetch_related("options")
+            .distinct()
+            .order_by("created_at", "id")
+        )
+        return Response(
+            {
+                "exam": ExamListSerializer(exam).data,
+                "questions": FreeExamQuestionSerializer(questions, many=True).data,
+            }
+        )
 
 
 class SubjectListView(APIView):

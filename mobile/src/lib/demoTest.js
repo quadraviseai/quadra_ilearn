@@ -1,52 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
-const DEMO_DURATION_SECONDS = 60;
+const MIN_DEMO_DURATION_SECONDS = 60;
+const SECONDS_PER_QUESTION = 45;
 const DEMO_STORAGE_KEY = "quadrailearn-demo-session";
-
-const QUESTIONS = [
-  {
-    id: "q1",
-    topic: "Kinematics",
-    prompt: "A car starts from rest and accelerates uniformly at 2 m/s². What distance does it cover in 4 seconds?",
-    options: [
-      { id: "a", label: "8 m" },
-      { id: "b", label: "16 m" },
-      { id: "c", label: "24 m" },
-      { id: "d", label: "32 m" },
-    ],
-    correctOptionId: "b",
-  },
-  {
-    id: "q2",
-    topic: "Biology Cells",
-    prompt: "Which cell organelle is known as the powerhouse of the cell?",
-    options: [
-      { id: "a", label: "Nucleus" },
-      { id: "b", label: "Ribosome" },
-      { id: "c", label: "Mitochondria" },
-      { id: "d", label: "Golgi body" },
-    ],
-    correctOptionId: "c",
-  },
-  {
-    id: "q3",
-    topic: "Quadratic Equations",
-    prompt: "If x² - 5x + 6 = 0, what are the roots?",
-    options: [
-      { id: "a", label: "2 and 3" },
-      { id: "b", label: "1 and 6" },
-      { id: "c", label: "-2 and -3" },
-      { id: "d", label: "3 and 6" },
-    ],
-    correctOptionId: "a",
-  },
-];
 
 let demoSession = null;
 
 function canUseWebStorage() {
   return Platform.OS === "web" && typeof localStorage !== "undefined";
+}
+
+function getSessionQuestions(session) {
+  return Array.isArray(session?.questions) ? session.questions : [];
+}
+
+function getDurationSeconds(questionCount) {
+  return Math.max(MIN_DEMO_DURATION_SECONDS, Number(questionCount || 0) * SECONDS_PER_QUESTION);
 }
 
 function persistDemoSession(session) {
@@ -101,14 +71,20 @@ export async function hydrateDemoSession() {
 }
 
 export function getDemoQuestions() {
-  return QUESTIONS;
+  return getSessionQuestions(getDemoSession());
 }
 
-export function startDemoSession(examName = "Quick Demo") {
+export function startDemoSession(examName = "Quick Demo", metadata = {}) {
+  const questions = Array.isArray(metadata.questions) ? metadata.questions : [];
+  const questionCount = Number(metadata.questionCount || questions.length || 0);
+
   demoSession = {
     examName,
+    examId: String(metadata.examId || ""),
+    questionCount,
+    questions,
     startedAt: Date.now(),
-    durationSeconds: DEMO_DURATION_SECONDS,
+    durationSeconds: Number(metadata.durationSeconds || 0) || getDurationSeconds(questionCount),
     answers: {},
   };
   persistDemoSession(demoSession);
@@ -144,7 +120,7 @@ export function answerDemoQuestion(questionId, optionId) {
 export function getRemainingDemoSeconds() {
   const currentSession = getDemoSession();
   if (!currentSession) {
-    return DEMO_DURATION_SECONDS;
+    return MIN_DEMO_DURATION_SECONDS;
   }
 
   const elapsed = Math.floor((Date.now() - currentSession.startedAt) / 1000);
@@ -162,47 +138,61 @@ export function buildDemoResult() {
     return null;
   }
 
+  const questions = getSessionQuestions(currentSession);
+  if (!questions.length) {
+    return null;
+  }
+
   const answers = currentSession.answers || {};
   let correct = 0;
   let wrong = 0;
 
-  QUESTIONS.forEach((question) => {
+  questions.forEach((question) => {
     const picked = answers[question.id];
     if (!picked) {
       return;
     }
-    if (picked === question.correctOptionId) {
+
+    const correctOptionId = question.correctOptionId || question.correct_option_id;
+    if (picked === correctOptionId) {
       correct += 1;
     } else {
       wrong += 1;
     }
   });
 
-  const unanswered = QUESTIONS.length - correct - wrong;
+  const unanswered = questions.length - correct - wrong;
   const elapsed = Math.min(
     currentSession.durationSeconds,
     Math.max(1, Math.floor((Date.now() - currentSession.startedAt) / 1000)),
   );
-  const betterThanLookup = {
-    0: 24,
-    1: 43,
-    2: 68,
-    3: 91,
-  };
-  const weakTopics = QUESTIONS.filter((question) => answers[question.id] !== question.correctOptionId).map((question) => ({
-    topic: question.topic,
-    explanation: `You need a sharper recall pattern for ${question.topic}. Review the core method once and try one more timed question.`,
-  }));
+  const accuracy = questions.length > 0 ? correct / questions.length : 0;
+  const betterThan = Math.max(18, Math.min(96, Math.round(24 + accuracy * 72)));
+  const estimatedRank = Math.max(12, Math.round((100 - betterThan) * 23));
+  const weakTopics = questions
+    .filter((question) => {
+      const correctOptionId = question.correctOptionId || question.correct_option_id;
+      return answers[question.id] !== correctOptionId;
+    })
+    .map((question) => ({
+      topic: question.topic,
+      explanation:
+        question.explanation
+        || `You need a sharper recall pattern for ${question.topic}. Review the core method once and try one more timed question.`,
+    }));
 
   return {
     examName: currentSession.examName,
-    totalQuestions: QUESTIONS.length,
+    examId: currentSession.examId,
+    totalQuestions: questions.length,
     correct,
     wrong,
     unanswered,
     elapsedSeconds: elapsed,
-    betterThan: betterThanLookup[correct] ?? 50,
-    rankText: "#124 out of 2,340 students",
-    weakTopics: weakTopics.length ? weakTopics : [{ topic: "Accuracy", explanation: "Your basics are solid. Keep practicing to improve speed." }],
+    betterThan,
+    rankText: `#${estimatedRank} out of 2,340 students`,
+    weakTopics: weakTopics.length
+      ? weakTopics
+      : [{ topic: "Accuracy", explanation: "Your basics are solid. Keep practicing to improve speed." }],
   };
 }

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AppState, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
-import { answerDemoQuestion, buildDemoResult, getDemoQuestions, getDemoSession, getRemainingDemoSeconds } from "../../src/lib/demoTest";
+import { answerDemoQuestion, buildDemoResult, getDemoQuestions, getDemoSession, getRemainingDemoSeconds, hydrateDemoSession } from "../../src/lib/demoTest";
 
 function formatTimer(seconds) {
   const safe = Math.max(0, seconds || 0);
@@ -17,8 +17,9 @@ const OPTION_KEYS = ["A", "B", "C", "D"];
 export default function DemoTestScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const questions = useMemo(() => getDemoQuestions(), []);
-  const session = getDemoSession();
+  const [questions, setQuestions] = useState(() => getDemoQuestions());
+  const [session, setSession] = useState(() => getDemoSession());
+  const [hydrated, setHydrated] = useState(() => Boolean(getDemoSession()?.questions?.length));
   const index = Math.max(0, Math.min(Number(params.index || 0), questions.length - 1));
   const currentQuestion = questions[index];
   const [selectedOptionId, setSelectedOptionId] = useState(session?.answers?.[currentQuestion?.id] || "");
@@ -27,7 +28,34 @@ export default function DemoTestScreen() {
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
-    if (!session) {
+    let active = true;
+
+    const ensureSession = async () => {
+      if (session?.questions?.length) {
+        setHydrated(true);
+        return;
+      }
+      const restored = await hydrateDemoSession();
+      if (!active) {
+        return;
+      }
+      setSession(restored);
+      setQuestions(Array.isArray(restored?.questions) ? restored.questions : []);
+      setHydrated(true);
+    };
+
+    void ensureSession();
+
+    return () => {
+      active = false;
+    };
+  }, [session?.questions?.length]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    if (!session || !questions.length) {
       router.replace("/demo");
       return;
     }
@@ -43,7 +71,7 @@ export default function DemoTestScreen() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [router, session]);
+  }, [hydrated, questions.length, router, session]);
 
   useEffect(() => {
     setSelectedOptionId(getDemoSession()?.answers?.[currentQuestion?.id] || "");
@@ -61,6 +89,10 @@ export default function DemoTestScreen() {
 
     return () => subscription.remove();
   }, []);
+
+  if (!hydrated) {
+    return <Screen loading />;
+  }
 
   if (!session || !currentQuestion) {
     return null;

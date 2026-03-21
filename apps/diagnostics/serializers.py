@@ -14,13 +14,39 @@ from apps.diagnostics.services import (
 
 class ExamListSerializer(serializers.ModelSerializer):
     subject_count = serializers.SerializerMethodField()
+    question_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Exam
-        fields = ["id", "name", "slug", "exam_set_type", "is_active", "retest_price", "subject_count"]
+        fields = ["id", "name", "slug", "exam_set_type", "is_active", "retest_price", "subject_count", "question_count"]
 
     def get_subject_count(self, obj):
         return obj.subjects.filter(is_active=True).count()
+
+    def get_question_count(self, obj):
+        return obj.questions.filter(status=Question.Status.ACTIVE).distinct().count()
+
+
+class FreeExamQuestionOptionSerializer(serializers.ModelSerializer):
+    label = serializers.CharField(source="option_text", read_only=True)
+
+    class Meta:
+        model = QuestionOption
+        fields = ["id", "label", "display_order"]
+
+
+class FreeExamQuestionSerializer(serializers.ModelSerializer):
+    topic = serializers.CharField(source="concept.name", read_only=True)
+    options = FreeExamQuestionOptionSerializer(many=True, read_only=True)
+    correct_option_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Question
+        fields = ["id", "topic", "prompt", "explanation", "question_type", "difficulty_level", "options", "correct_option_id"]
+
+    def get_correct_option_id(self, obj):
+        correct_option = obj.options.filter(is_correct=True).order_by("display_order").first()
+        return str(correct_option.id) if correct_option else None
 
 
 class SubjectListSerializer(serializers.ModelSerializer):

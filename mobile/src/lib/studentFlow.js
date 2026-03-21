@@ -39,6 +39,10 @@ export function fetchExams() {
   return apiRequest("/api/diagnostic/exams");
 }
 
+export function fetchFreeExamSet(examId) {
+  return apiRequest(`/api/diagnostic/exams/${examId}/free-set`);
+}
+
 export function fetchSubjects(examId) {
   return apiRequest(`/api/diagnostic/exams/${examId}/subjects`);
 }

@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
+import { fetchFreeExamSet } from "../../src/lib/studentFlow";
 import { startDemoSession } from "../../src/lib/demoTest";
 
 const heroImage = require("../../assets/exam-generic.png");
@@ -28,10 +30,57 @@ export default function DemoIntroScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const examName = typeof params.exam === "string" && params.exam ? params.exam : "Quick Demo";
+  const examId = typeof params.examId === "string" ? params.examId : "";
+  const [examSetState, setExamSetState] = useState({ loading: true, questions: [], error: "" });
   const ui = examPresentation(examName);
+  const questionCount = examSetState.questions.length || Math.max(0, Number(params.questionCount || 0));
+  const durationLabel = useMemo(() => {
+    const totalSeconds = Math.max(60, questionCount * 45);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (!minutes) {
+      return `${seconds} seconds`;
+    }
+    if (!seconds) {
+      return `${minutes} min`;
+    }
+    return `${minutes}m ${seconds}s`;
+  }, [questionCount]);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!examId) {
+        setExamSetState({ loading: false, questions: [], error: "Exam not found." });
+        return;
+      }
+      try {
+        const payload = await fetchFreeExamSet(examId);
+        if (!active) {
+          return;
+        }
+        setExamSetState({
+          loading: false,
+          questions: Array.isArray(payload?.questions) ? payload.questions : [],
+          error: "",
+        });
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        setExamSetState({ loading: false, questions: [], error: error.message || "Unable to load this free exam set." });
+      }
+    };
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, [examId]);
 
   return (
-    <Screen topPadding={0} horizontalPadding={0}>
+    <Screen topPadding={0} horizontalPadding={0} loading={examSetState.loading}>
       <View style={styles.page}>
         <View style={styles.hero}>
           <Image source={heroImage} style={styles.heroImage} resizeMode="cover" />
@@ -56,6 +105,7 @@ export default function DemoIntroScreen() {
           <Text style={styles.subtitle}>
             Attempt a short mock, see your ranking instantly, and understand where you need to improve next.
           </Text>
+          {examSetState.error ? <Text style={styles.errorText}>{examSetState.error}</Text> : null}
 
           <View style={styles.examInfoCard}>
             <View style={styles.examInfoRow}>
@@ -71,7 +121,9 @@ export default function DemoIntroScreen() {
               </View>
               <View style={styles.examTextCol}>
                 <Text style={styles.examName}>{examName}</Text>
-                <Text style={styles.examCategory}>{ui.category}</Text>
+                <Text style={styles.examCategory}>
+                  {questionCount > 0 ? `${questionCount} active questions tagged to this exam` : ui.category}
+                </Text>
               </View>
             </View>
           </View>
@@ -80,12 +132,12 @@ export default function DemoIntroScreen() {
             <View style={styles.detailRow}>
               <Ionicons name="time-outline" size={16} color="#64748B" />
               <Text style={styles.detailLabel}>Duration</Text>
-              <Text style={styles.detailValue}>60 seconds</Text>
+              <Text style={styles.detailValue}>{durationLabel}</Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="list-outline" size={16} color="#64748B" />
-              <Text style={styles.detailLabel}>Format</Text>
-              <Text style={styles.detailValue}>3 quick questions</Text>
+              <Text style={styles.detailLabel}>Questions</Text>
+              <Text style={styles.detailValue}>{questionCount > 0 ? `${questionCount} tagged` : "Tagged by admin"}</Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="analytics-outline" size={16} color="#64748B" />
@@ -107,9 +159,14 @@ export default function DemoIntroScreen() {
           </View>
 
           <Pressable
-            style={styles.buyButton}
+            style={[styles.buyButton, (!questionCount || examSetState.loading || examSetState.error) ? styles.buyButtonDisabled : null]}
+            disabled={!questionCount || examSetState.loading || Boolean(examSetState.error)}
             onPress={() => {
-              startDemoSession(examName);
+              startDemoSession(examName, {
+                examId,
+                questionCount,
+                questions: examSetState.questions,
+              });
               router.replace("/demo/test?index=0");
             }}
           >
@@ -324,10 +381,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  buyButtonDisabled: {
+    opacity: 0.45,
+  },
   buyButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
     lineHeight: 20,
     fontWeight: "600",
+  },
+  errorText: {
+    color: "#B91C1C",
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

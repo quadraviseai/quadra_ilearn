@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { Image } from "react-native";
 
 import Screen from "../../src/components/Screen";
-import { buildDemoResult, resetDemoSession, startDemoSession } from "../../src/lib/demoTest";
+import { buildDemoResult, getDemoQuestions, resetDemoSession, startDemoSession } from "../../src/lib/demoTest";
 
 function getResultMood(correct, total) {
   const ratio = total > 0 ? correct / total : 0;
@@ -114,8 +114,13 @@ export default function DemoResultScreen() {
           style={styles.secondaryButton}
           onPress={() => {
             const examName = result.examName;
+            const questions = getDemoQuestions();
             resetDemoSession();
-            startDemoSession(examName);
+            startDemoSession(examName, {
+              examId: result.examId,
+              questionCount: result.totalQuestions,
+              questions,
+            });
             router.replace("/demo/test?index=0");
           }}
         >

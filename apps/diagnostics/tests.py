@@ -64,6 +64,15 @@ class MockTestFlowTests(APITestCase):
         self.assertEqual(subjects_response.status_code, status.HTTP_200_OK)
         self.assertEqual(subjects_response.data[0]["name"], "Physics")
 
+    def test_free_exam_set_endpoint_returns_active_tagged_questions(self):
+        self.client.credentials()
+        response = self.client.get(f"/api/diagnostic/exams/{self.exam.id}/free-set")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["exam"]["id"], str(self.exam.id))
+        self.assertEqual(response.data["exam"]["exam_set_type"], Exam.ExamSetType.FREE)
+        self.assertEqual(len(response.data["questions"]), 30)
+        self.assertIn("correct_option_id", response.data["questions"][0])
+
     def test_free_attempt_eligibility_start_save_submit_and_report(self):
         eligibility = self.client.get(
             "/api/diagnostic/eligibility",

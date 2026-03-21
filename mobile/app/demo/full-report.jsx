@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
-import { buildDemoResult, hydrateDemoSession, resetDemoSession, startDemoSession } from "../../src/lib/demoTest";
+import { buildDemoResult, getDemoQuestions, hydrateDemoSession, resetDemoSession, startDemoSession } from "../../src/lib/demoTest";
 
 export default function DemoFullReportScreen() {
   const router = useRouter();
@@ -161,8 +161,13 @@ export default function DemoFullReportScreen() {
         <Pressable
           style={styles.secondaryButton}
           onPress={() => {
+            const questions = getDemoQuestions();
             resetDemoSession();
-            startDemoSession(result.examName);
+            startDemoSession(result.examName, {
+              examId: result.examId,
+              questionCount: result.totalQuestions,
+              questions,
+            });
             router.replace("/demo/test?index=0");
           }}
         >

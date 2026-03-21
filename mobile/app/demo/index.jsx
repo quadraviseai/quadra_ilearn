@@ -35,10 +35,13 @@ export default function DemoExamSelectionScreen() {
     const load = async () => {
       try {
         const exams = await fetchExams();
+        const freeExamSets = Array.isArray(exams)
+          ? exams.filter((exam) => String(exam.exam_set_type || "free") === "free")
+          : [];
         if (!active) {
           return;
         }
-        setState({ loading: false, exams: Array.isArray(exams) ? exams : [], error: "" });
+        setState({ loading: false, exams: freeExamSets, error: "" });
       } catch (error) {
         if (!active) {
           return;
@@ -79,10 +82,20 @@ export default function DemoExamSelectionScreen() {
       <View style={styles.list}>
         {state.exams.map((exam) => {
           const presentation = getExamPresentation(exam.name);
+          const questionCount = Number(exam.question_count || 0);
           return (
           <Pressable
             key={String(exam.id)}
-            onPress={() => router.push({ pathname: "/demo/intro", params: { exam: exam.name, examId: String(exam.id) } })}
+            onPress={() =>
+              router.push({
+                pathname: "/demo/intro",
+                params: {
+                  exam: exam.name,
+                  examId: String(exam.id),
+                  questionCount: String(questionCount),
+                },
+              })
+            }
             style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
           >
             <View style={styles.thumbWrap}>
@@ -100,7 +113,7 @@ export default function DemoExamSelectionScreen() {
                   <Text style={[styles.tagText, { color: presentation.tone }]}>{presentation.tag}</Text>
                 </View>
                 <View style={styles.tagChipNeutral}>
-                  <Text style={styles.tagTextNeutral}>Free Test</Text>
+                  <Text style={styles.tagTextNeutral}>{questionCount} questions</Text>
                 </View>
               </View>
             </View>
@@ -113,6 +126,10 @@ export default function DemoExamSelectionScreen() {
         );
         })}
       </View>
+
+      {!state.loading && !state.error && !state.exams.length ? (
+        <Text style={styles.emptyText}>No free exam sets are available right now.</Text>
+      ) : null}
     </Screen>
   );
 }
@@ -186,6 +203,13 @@ const styles = StyleSheet.create({
     color: "#B91C1C",
     fontSize: 13,
     lineHeight: 18,
+  },
+  emptyText: {
+    marginTop: 16,
+    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
   },
   card: {
     width: "100%",
