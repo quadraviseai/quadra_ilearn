@@ -1,37 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { makeRedirectUri } from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
-import { LinearGradient } from "expo-linear-gradient";
-import { Link, useRouter } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
 import { apiRequest } from "../../src/lib/api";
-import { colors, gradients, radii, shadows, spacing } from "../../src/theme";
+import { clearPendingAuthRedirect, getPendingAuthRedirect, setPendingAuthRedirect } from "../../src/lib/authRedirect";
+import { buildDemoResult } from "../../src/lib/demoTest";
+import {
+  buildNativeGoogleRedirect,
+  clearPendingGoogleAuth,
+  DEFAULT_GOOGLE_ANDROID_CLIENT_ID,
+  DEFAULT_GOOGLE_IOS_CLIENT_ID,
+  DEFAULT_GOOGLE_WEB_CLIENT_ID,
+  setPendingGoogleAuth,
+} from "../../src/lib/googleAuth";
 
 WebBrowser.maybeCompleteAuthSession();
-
-const DEFAULT_GOOGLE_WEB_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
-const DEFAULT_GOOGLE_ANDROID_CLIENT_ID = "52499757157-6724lll0jek5os124d8jctg11kfjhrck.apps.googleusercontent.com";
-const DEFAULT_GOOGLE_IOS_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
-
-function buildNativeGoogleRedirect(clientId) {
-  const compactClientId = String(clientId || "").trim().replace(/\.apps\.googleusercontent\.com$/i, "");
-  if (!compactClientId) {
-    return undefined;
-  }
-  return `com.googleusercontent.apps.${compactClientId}:/oauthredirect`;
-}
-
-const initialForm = {
-  name: "",
-  phone: "",
-  email: "",
-  password: "",
-  referral_code: "",
-};
 
 function routeForRole(role) {
   if (role === "admin") {
@@ -40,9 +29,18 @@ function routeForRole(role) {
   return "/(student)/diagnostics";
 }
 
+const initialForm = {
+  name: "",
+  email: "",
+  mobile: "",
+  password: "",
+};
+
 export default function RegisterScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { authenticateWithGoogle } = useAuth();
+  const result = buildDemoResult();
   const [form, setForm] = useState(initialForm);
   const [state, setState] = useState({
     loading: false,
@@ -50,6 +48,8 @@ export default function RegisterScreen() {
     error: "",
     success: "",
   });
+  const [emailModalVisible, setEmailModalVisible] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
 
   const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || DEFAULT_GOOGLE_WEB_CLIENT_ID;
   const googleAndroidClientId =
@@ -75,12 +75,33 @@ export default function RegisterScreen() {
     selectAccount: true,
     nonce,
   });
+  const redirectPath = typeof params.redirect === "string" && params.redirect ? params.redirect : "";
+
+  useEffect(() => {
+    if (!redirectPath) {
+      return;
+    }
+    void setPendingAuthRedirect(redirectPath);
+  }, [redirectPath]);
 
   const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
+  const closeEmailModal = () => {
+    if (state.loading) {
+      return;
+    }
+    setState((current) => ({ ...current, error: "", success: "" }));
+    setVerificationEmail("");
+    setEmailModalVisible(false);
+  };
+
   const handleSubmit = async () => {
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-      setState((current) => ({ ...current, error: "Name, email, and password are required.", success: "" }));
+    if (!form.name.trim() || !form.email.trim() || !form.mobile.trim() || !form.password.trim()) {
+      setState((current) => ({
+        ...current,
+        error: "Full name, email, mobile number, and password are required.",
+        success: "",
+      }));
       return;
     }
 
@@ -91,18 +112,17 @@ export default function RegisterScreen() {
         body: {
           name: form.name.trim(),
           email: form.email.trim(),
+          phone: form.mobile.trim(),
           password: form.password,
           role: "student",
-          phone: form.phone.trim(),
-          referral_code: form.referral_code.trim(),
         },
       });
       setState((current) => ({
         ...current,
         loading: false,
-        success: "Registration completed. Check your email to verify the account.",
+        success: "Activation email sent. Open the verification link in your email to finish signup.",
       }));
-      setTimeout(() => router.replace("/(auth)/login"), 900);
+      setVerificationEmail(form.email.trim());
     } catch (error) {
       setState((current) => ({ ...current, loading: false, error: error.message, success: "" }));
     }
@@ -122,7 +142,7 @@ export default function RegisterScreen() {
         return;
       }
 
-      const credential = googleResponse.params?.id_token;
+      const credential = googleResponse.params?.id_token || googleResponse.authentication?.idToken;
       if (!credential) {
         setState((current) => ({ ...current, googleLoading: false, error: "Google did not return an ID token." }));
         return;
@@ -134,10 +154,12 @@ export default function RegisterScreen() {
           intent: "register",
           name: form.name.trim(),
           role: "student",
-          phone: form.phone.trim(),
-          referral_code: form.referral_code.trim(),
+          phone: form.mobile.trim(),
         });
-        router.replace(routeForRole(session.user.role));
+        const nextPath = redirectPath || (await getPendingAuthRedirect()) || routeForRole(session.user.role);
+        await clearPendingGoogleAuth();
+        await clearPendingAuthRedirect();
+        router.replace(nextPath);
       } catch (error) {
         setState((current) => ({ ...current, error: error.message }));
       } finally {
@@ -146,269 +168,461 @@ export default function RegisterScreen() {
     };
 
     completeGoogleRegister();
-  }, [authenticateWithGoogle, form.name, form.phone, form.referral_code, googleResponse, router]);
+  }, [authenticateWithGoogle, form.mobile, form.name, googleResponse, redirectPath, router]);
 
   const handleGoogleRegister = async () => {
-    if (!form.name.trim()) {
-      setState((current) => ({ ...current, error: "Add your full name before continuing with Google.", success: "" }));
-      return;
-    }
     if (!googleRequest) {
-      setState((current) => ({ ...current, error: "Google sign-in is not ready yet.", success: "" }));
       return;
     }
 
     setState((current) => ({ ...current, error: "", success: "", googleLoading: true }));
+    if (Platform.OS !== "web") {
+      await setPendingGoogleAuth({
+        intent: "register",
+        redirectPath,
+        name: form.name.trim(),
+        phone: form.mobile.trim(),
+        codeVerifier: googleRequest.codeVerifier || "",
+        redirectUri: googleRedirectUri,
+      });
+    }
     await promptAsync();
   };
 
   return (
     <Screen>
-      <LinearGradient colors={gradients.authHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-        <View style={styles.heroMarkRow}>
-          <View style={styles.heroMark}>
-            <Image source={require("../../assets/quadravise-logo.png")} style={styles.heroMarkImage} resizeMode="contain" />
+      <View style={styles.page}>
+        <View style={styles.brandRow}>
+          <View style={styles.logoWrap}>
+            <Image source={require("../../assets/quadravise-logo.png")} style={styles.logo} resizeMode="contain" />
           </View>
-          <View style={styles.heroMarkCopy}>
-            <Text style={styles.eyebrow}>QuadraILearn Mobile</Text>
-            <Text style={styles.heroKicker}>Native student registration</Text>
-          </View>
-        </View>
-        <Text style={styles.title}>Create your QuadraILearn account on mobile.</Text>
-        <Text style={styles.copy}>
-          Start as a student, keep referral rewards, and use the same account across mobile and web.
-        </Text>
-      </LinearGradient>
-
-      <View style={styles.formCard}>
-        <Text style={styles.sectionTitle}>Create account</Text>
-        <Text style={styles.sectionCopy}>Set up your student account with email/password or Google.</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Full name"
-          placeholderTextColor={colors.slateSoft}
-          value={form.name}
-          onChangeText={(value) => setField("name", value)}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Mobile"
-          placeholderTextColor={colors.slateSoft}
-          keyboardType="phone-pad"
-          value={form.phone}
-          onChangeText={(value) => setField("phone", value)}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.slateSoft}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={form.email}
-          onChangeText={(value) => setField("email", value)}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={colors.slateSoft}
-          secureTextEntry
-          value={form.password}
-          onChangeText={(value) => setField("password", value)}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Referral code (optional)"
-          placeholderTextColor={colors.slateSoft}
-          autoCapitalize="characters"
-          value={form.referral_code}
-          onChangeText={(value) => setField("referral_code", value.toUpperCase())}
-        />
-
-        {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
-        {state.success ? <Text style={styles.success}>{state.success}</Text> : null}
-
-        <Pressable style={[styles.button, state.loading ? styles.buttonDisabled : null]} onPress={handleSubmit} disabled={state.loading}>
-          <Text style={styles.buttonText}>{state.loading ? "Creating account..." : "Create account"}</Text>
-        </Pressable>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
+          <Text style={styles.brandText}>QuadraILearn</Text>
         </View>
 
-        <Pressable
-          style={[styles.googleButton, (state.googleLoading || state.loading) ? styles.buttonDisabled : null]}
-          onPress={handleGoogleRegister}
-          disabled={state.googleLoading || state.loading}
-        >
-          <Text style={styles.googleButtonMark}>G</Text>
-          <Text style={styles.googleButtonText}>{state.googleLoading ? "Opening Google..." : "Continue with Google"}</Text>
-        </Pressable>
+        <View style={styles.content}>
+          {result ? (
+            <View style={styles.resultReminder}>
+              <Text style={styles.resultScore}>Your Score: {result.correct} / {result.totalQuestions}</Text>
+              <Text style={styles.resultRank}>You beat {result.betterThan}% of students</Text>
+            </View>
+          ) : null}
 
-        <Text style={styles.footnote}>
-          Already registered? <Link href="/(auth)/login" style={styles.link}>Sign in</Link>
-        </Text>
+          <View style={styles.headlineBlock}>
+            <Text style={styles.title}>Unlock Your Full Report</Text>
+            <Text style={styles.copy}>Create your account to save your result and see your full analysis.</Text>
+          </View>
+
+          <View style={styles.bulletList}>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletIcon}>+</Text>
+              <Text style={styles.bulletText}>Your exact rank</Text>
+            </View>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletIcon}>+</Text>
+              <Text style={styles.bulletText}>Weak topics analysis</Text>
+            </View>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletIcon}>+</Text>
+              <Text style={styles.bulletText}>AI explanations</Text>
+            </View>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletIcon}>+</Text>
+              <Text style={styles.bulletText}>Personalized improvement plan</Text>
+            </View>
+          </View>
+
+          <Pressable
+            style={[styles.googleButton, (state.googleLoading || state.loading) ? styles.buttonDisabled : null]}
+            onPress={handleGoogleRegister}
+            disabled={state.googleLoading || state.loading}
+          >
+            <Ionicons name="logo-google" size={18} color="#FFFFFF" />
+            <Text style={styles.googleButtonText}>{state.googleLoading ? "Opening Google..." : "Continue with Google"}</Text>
+          </Pressable>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <Pressable style={styles.emailEntryButton} onPress={() => setEmailModalVisible(true)}>
+            <Text style={styles.emailEntryButtonText}>Continue with Email</Text>
+          </Pressable>
+
+          <Text style={styles.trustText}>Takes less than 10 seconds</Text>
+
+          <Text style={styles.footerText}>
+            Already have an account?{" "}
+            <Link href={redirectPath ? { pathname: "/(auth)/login", params: { redirect: redirectPath } } : "/(auth)/login"} style={styles.link}>
+              Sign in
+            </Link>
+          </Text>
+        </View>
       </View>
+
+      <Modal visible={emailModalVisible} animationType="slide" transparent onRequestClose={closeEmailModal}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalScrim} onPress={closeEmailModal} />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Continue with Email</Text>
+              <Pressable style={styles.modalClose} onPress={closeEmailModal}>
+                <Ionicons name="close" size={18} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <Text style={styles.modalCopy}>Enter your details below. We will send an activation link to your email.</Text>
+
+            {verificationEmail ? (
+              <View style={styles.successState}>
+                <View style={styles.successCard}>
+                  <Ionicons name="mail-open-outline" size={22} color="#1D4E89" />
+                  <Text style={styles.successTitle}>Check your email</Text>
+                  <Text style={styles.successDescription}>
+                    We sent an activation link to {verificationEmail}. Open that link to finish creating your account.
+                  </Text>
+                </View>
+
+                <Pressable
+                  style={styles.modalPrimaryButton}
+                  onPress={() =>
+                    router.replace(redirectPath ? { pathname: "/(auth)/login", params: { redirect: redirectPath } } : "/(auth)/login")
+                  }
+                >
+                  <Text style={styles.modalPrimaryButtonText}>Go to Sign in</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.modalSecondaryButton}
+                  onPress={() => {
+                    setVerificationEmail("");
+                    setState((current) => ({ ...current, error: "", success: "" }));
+                  }}
+                >
+                  <Text style={styles.modalSecondaryButtonText}>Use another email</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <View style={styles.formBlock}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Full Name"
+                    placeholderTextColor="#94A3B8"
+                    autoComplete="name"
+                    value={form.name}
+                    onChangeText={(value) => setField("name", value)}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email"
+                    placeholderTextColor="#94A3B8"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    value={form.email}
+                    onChangeText={(value) => setField("email", value)}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Mobile Number"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                    autoComplete="tel"
+                    value={form.mobile}
+                    onChangeText={(value) => setField("mobile", value)}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChangeText={(value) => setField("password", value)}
+                  />
+
+                  {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
+                  {state.success ? <Text style={styles.success}>{state.success}</Text> : null}
+
+                  <Pressable style={[styles.modalPrimaryButton, state.loading ? styles.buttonDisabled : null]} onPress={handleSubmit} disabled={state.loading}>
+                    <Text style={styles.modalPrimaryButtonText}>{state.loading ? "Continuing..." : "Continue"}</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={styles.modalTrustText}>Verification happens through the activation link sent to your email.</Text>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    borderRadius: radii.xl,
-    padding: spacing.xl,
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.glassChip,
-    ...shadows.card,
+  page: {
+    flex: 1,
+    paddingTop: 8,
   },
-  heroMarkRow: {
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: 8,
+    minHeight: 32,
+    marginBottom: 16,
   },
-  heroMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
+  logoWrap: {
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.line,
-    ...shadows.glow,
   },
-  heroMarkImage: {
-    width: 36,
-    height: 36,
+  logo: {
+    width: 28,
+    height: 28,
   },
-  heroMarkCopy: {
-    flex: 1,
-  },
-  eyebrow: {
-    color: colors.brandBlue,
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  heroKicker: {
-    color: colors.inkSoft,
-    marginTop: 4,
+  brandText: {
+    color: "#0F172A",
+    fontSize: 14,
     fontWeight: "700",
   },
+  content: {
+    gap: 18,
+    paddingBottom: 24,
+  },
+  resultReminder: {
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
+    padding: 14,
+  },
+  resultScore: {
+    color: "#0F172A",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  resultRank: {
+    color: "#1D4E89",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  headlineBlock: {
+    gap: 8,
+  },
   title: {
-    color: colors.ink,
+    color: "#0F172A",
     fontSize: 30,
     lineHeight: 36,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   copy: {
-    color: colors.slate,
+    color: "#475569",
     fontSize: 15,
     lineHeight: 22,
   },
-  formCard: {
-    backgroundColor: colors.glassStrong,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.glassChip,
-    ...shadows.card,
+  bulletList: {
+    gap: 10,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: colors.ink,
+  bulletRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
   },
-  sectionCopy: {
-    color: colors.slate,
-    marginTop: -2,
-    lineHeight: 20,
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 15,
-    borderWidth: 1,
-    borderColor: colors.line,
-    color: colors.ink,
-  },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingVertical: 16,
-    alignItems: "center",
-    ...shadows.glow,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: colors.white,
-    fontWeight: "800",
+  bulletIcon: {
+    color: "#1D4E89",
     fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "700",
   },
-  success: {
-    color: colors.success,
-    fontSize: 13,
+  bulletText: {
+    flex: 1,
+    color: "#0F172A",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "600",
   },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
+  googleButton: {
+    minHeight: 54,
+    borderRadius: 999,
+    backgroundColor: "#FF7A00",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  googleButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: 12,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.line,
+    backgroundColor: "#E2E8F0",
   },
   dividerText: {
-    color: colors.slate,
+    color: "#64748B",
+    fontSize: 12,
     fontWeight: "700",
   },
-  googleButton: {
-    flexDirection: "row",
+  emailEntryButton: {
+    minHeight: 52,
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
-    borderRadius: radii.md,
-    paddingVertical: 15,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.card,
-    ...shadows.card,
   },
-  googleButtonMark: {
-    width: 30,
-    height: 30,
-    borderRadius: radii.pill,
+  emailEntryButtonText: {
+    color: "#1D4E89",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  trustText: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "500",
     textAlign: "center",
-    textAlignVertical: "center",
-    backgroundColor: colors.brandBlueSoft,
-    color: colors.brandBlue,
-    fontWeight: "900",
-    lineHeight: 30,
   },
-  googleButtonText: {
-    color: colors.brandBlueDeep,
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  footnote: {
-    color: colors.slate,
-    lineHeight: 20,
+  footerText: {
+    color: "#64748B",
+    fontSize: 14,
+    textAlign: "center",
   },
   link: {
-    color: colors.brandBlue,
+    color: "#1D4E89",
+    fontWeight: "700",
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.28)",
+  },
+  modalScrim: {
+    flex: 1,
+  },
+  modalSheet: {
+    backgroundColor: "#F8FAFC",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 28,
+    gap: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  modalTitle: {
+    color: "#0F172A",
+    fontSize: 20,
     fontWeight: "800",
+  },
+  modalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  modalCopy: {
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  formBlock: {
+    gap: 12,
+  },
+  input: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    color: "#0F172A",
+    fontSize: 14,
+  },
+  modalPrimaryButton: {
+    minHeight: 52,
+    borderRadius: 999,
+    backgroundColor: "#FF7A00",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  modalPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  modalTrustText: {
+    color: "#64748B",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  successState: {
+    gap: 14,
+  },
+  successCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    padding: 18,
+    gap: 10,
+  },
+  successTitle: {
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  successDescription: {
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  modalSecondaryButton: {
+    minHeight: 48,
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalSecondaryButtonText: {
+    color: "#1D4E89",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  error: {
+    color: "#C54F4F",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  success: {
+    color: "#248F63",
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

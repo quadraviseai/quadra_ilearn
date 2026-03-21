@@ -26,7 +26,7 @@ Initial Django backend scaffold for QuadraILearn using:
 
 ## Local setup
 1. Create or update `.env` with your PostgreSQL credentials.
-   - For forgot-password email, also set `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, and `DEFAULT_FROM_EMAIL`.
+   - For verification and forgot-password email, also set `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, and `DEFAULT_FROM_EMAIL`.
 2. Activate the virtual environment:
    - PowerShell: `.\\.venv\\Scripts\\Activate.ps1`
 3. Run migrations:

@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
 import { apiRequest } from "../../src/lib/api";
+import { getPendingAuthRedirect } from "../../src/lib/authRedirect";
 import { readSingleParam } from "../../src/lib/linking";
 import { colors, gradients, radii, shadows, spacing } from "../../src/theme";
 
@@ -18,6 +19,24 @@ export default function VerifyEmailScreen() {
     error: "",
     success: "",
   });
+  const [loginHref, setLoginHref] = useState("/(auth)/login");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadRedirect = async () => {
+      const redirect = await getPendingAuthRedirect();
+      if (!active) {
+        return;
+      }
+      setLoginHref(redirect ? { pathname: "/(auth)/login", params: { redirect } } : "/(auth)/login");
+    };
+
+    loadRedirect();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const verify = async () => {
@@ -52,7 +71,7 @@ export default function VerifyEmailScreen() {
         {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
         {state.success ? <Text style={styles.success}>{state.success}</Text> : null}
         <Text style={styles.footnote}>
-          Continue to <Link href="/(auth)/login" style={styles.link}>Sign in</Link>
+          Continue to <Link href={loginHref} style={styles.link}>Sign in</Link>
         </Text>
       </View>
     </Screen>

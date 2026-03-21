@@ -5,6 +5,7 @@ import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from "@
 
 import AppLoader from "../src/components/AppLoader";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
+import { getPendingAuthRedirectSync } from "../src/lib/authRedirect";
 import {
   attachNotificationHandlers,
   registerForPushNotificationsAsync,
@@ -31,9 +32,10 @@ function AppNavigator() {
     const inAuthGroup = segments[0] === "(auth)";
     const inStudentGroup = segments[0] === "(student)";
     const inAdminGroup = segments[0] === "(admin)";
+    const inDemoRoute = segments[0] === "demo";
     const inPublicLanding = segments.length === 0;
 
-    if (!isAuthenticated && !inAuthGroup && !inPublicLanding) {
+    if (!isAuthenticated && !inAuthGroup && !inPublicLanding && !inDemoRoute) {
       router.replace("/(auth)/login");
       return;
     }
@@ -44,7 +46,7 @@ function AppNavigator() {
     }
 
     if (isAuthenticated && inAuthGroup) {
-      router.replace(routeForRole(user?.role));
+      router.replace(getPendingAuthRedirectSync() || routeForRole(user?.role));
       return;
     }
 
@@ -103,14 +105,7 @@ function AppNavigator() {
     return <AppLoader label="Checking your session" detail="Loading account state and mobile routes" />;
   }
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(admin)" />
-      <Stack.Screen name="(student)" />
-    </Stack>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 export default function RootLayout() {

@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
 from django.core import mail
 from django.test import override_settings
 from django.contrib.auth.tokens import default_token_generator
@@ -48,6 +49,23 @@ class AuthApiTests(APITestCase):
         self.assertEqual(str(profile.date_of_birth), "2011-04-15")
         self.assertEqual(profile.primary_target_exam, "JEE")
         self.assertEqual(profile.secondary_target_exam, "Olympiad")
+
+    @patch("apps.users.views.send_verification_email", side_effect=ImproperlyConfigured("SMTP credentials are missing."))
+    def test_register_returns_503_and_rolls_back_when_email_fails(self, _mocked_send_verification_email):
+        response = self.client.post(
+            "/api/auth/register",
+            {
+                "name": "Student One",
+                "email": "student@example.com",
+                "password": "password123",
+                "role": "student",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertIn("SMTP", str(response.data["detail"]))
+        self.assertFalse(get_user_model().objects.filter(email="student@example.com").exists())
 
     def test_login_returns_jwt_tokens(self):
         user = get_user_model().objects.create_user(

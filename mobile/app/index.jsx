@@ -1,67 +1,45 @@
-import { useEffect, useState } from "react";
 import { Link } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import Screen from "../src/components/Screen";
-import { fetchExams } from "../src/lib/studentFlow";
-import { colors, radii, spacing } from "../src/theme";
 
-const journeySteps = [
-  { title: "Sign in", copy: "Open your student account", icon: "person-outline" },
-  { title: "Choose exam", copy: "Pick the admin-published exam", icon: "school-outline" },
-  { title: "Start mock test", copy: "Finish with timer and see result", icon: "timer-outline" },
+const ui = {
+  color: {
+    primaryBlue: "#1D4E89",
+    primaryOrange: "#FF7A00",
+    background: "#F8FAFC",
+    surface: "#FFFFFF",
+    surfaceSoft: "#F1F5F9",
+    surfaceWarm: "#FFF7ED",
+    border: "#E2E8F0",
+    divider: "#E5E7EB",
+    textPrimary: "#0F172A",
+    textSecondary: "#475569",
+    textTertiary: "#94A3B8",
+  },
+  radius: {
+    md: 12,
+    lg: 16,
+    pill: 999,
+  },
+  spacing: {
+    md: 12,
+    lg: 16,
+  },
+};
+
+const leaderboardPreview = [
+  { rank: 1, name: "Rahul", score: "98%", tone: "#F4B400" },
+  { rank: 2, name: "Sneha", score: "96%", tone: "#B8C2CC" },
+  { rank: 3, name: "Arjun", score: "95%", tone: "#C97A40" },
 ];
 
-function examIcon(name) {
-  const value = String(name || "").toLowerCase();
-  if (value.includes("jee")) {
-    return "flask-outline";
-  }
-  if (value.includes("neet") || value.includes("medical")) {
-    return "medkit-outline";
-  }
-  if (value.includes("board") || value.includes("cbse") || value.includes("icse")) {
-    return "school-outline";
-  }
-  if (value.includes("gate")) {
-    return "construct-outline";
-  }
-  return "document-text-outline";
+function SectionTitle({ children }) {
+  return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
 export default function LandingScreen() {
-  const [examItems, setExamItems] = useState([]);
-  const [examError, setExamError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadExams() {
-      try {
-        const response = await fetchExams();
-        if (!active) {
-          return;
-        }
-        setExamItems(Array.isArray(response) ? response.slice(0, 4) : []);
-        setExamError("");
-      } catch {
-        if (!active) {
-          return;
-        }
-        setExamItems([]);
-        setExamError("Exams will appear here once published by admin.");
-      }
-    }
-
-    loadExams();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
   return (
     <Screen>
       <View style={styles.topBar}>
@@ -69,422 +47,296 @@ export default function LandingScreen() {
           <View style={styles.logoWrap}>
             <Image source={require("../assets/quadravise-logo.png")} style={styles.logoImage} resizeMode="contain" />
           </View>
-          <View>
-            <Text style={styles.brandLabel}>Order your favorite</Text>
-            <Text style={styles.brandValue}>Next Mock Test</Text>
+          <View style={styles.brandCopy}>
+            <Text style={styles.brandName}>QuadraILearn</Text>
+            <Text style={styles.brandTagline}>Compete. Improve. Rank higher.</Text>
           </View>
         </View>
-        <View style={styles.topIcon}>
-          <Ionicons name="notifications-outline" size={18} color={colors.accentStrong} />
+      </View>
+
+      <View style={styles.heroBlock}>
+        <View style={styles.heroBadge}>
+          <Ionicons name="flash-outline" size={14} color={ui.color.primaryBlue} />
+          <Text style={styles.heroBadgeText}>Live practice environment</Text>
         </View>
+
+        <Text style={styles.heroTitle}>Test Your Rank in 60 Seconds</Text>
+        <Text style={styles.heroCopy}>See your score, rank, and improve instantly.</Text>
+        <Text style={styles.heroTrustCopy}>No signup required</Text>
+
+        <View style={styles.heroActions}>
+          <Link href="/demo" asChild>
+            <Pressable style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Start Free Test</Text>
+            </Pressable>
+          </Link>
+          <Link href="/(auth)/login" asChild>
+            <Pressable style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>Login</Text>
+            </Pressable>
+          </Link>
+        </View>
+
+        <Text style={styles.heroSocialProof}>12k+ students attempted today • Top 10% scored 85%+</Text>
       </View>
 
-      <View style={styles.heroBackground}>
-        <Image source={require("../assets/landing-hero.png")} style={styles.heroBackdropImage} resizeMode="cover" />
-        <LinearGradient
-          colors={["rgba(255,249,244,0.72)", "rgba(255,244,235,0.10)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroBanner}
-        >
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroTitle}>Start your exam journey the right way.</Text>
-            <Text style={styles.heroSubtext}>Choose an exam, take the mock test, and review your weak concepts.</Text>
-          </View>
-          <View style={styles.heroArtwork}>
-            <View style={styles.heroArtworkCircleLarge} />
-            <View style={styles.heroArtworkCircleSmall} />
-            <View style={styles.heroArtworkCard}>
-              <Image source={require("../assets/quadravise-logo.png")} style={styles.heroArtworkLogo} resizeMode="contain" />
-            </View>
-          </View>
-        </LinearGradient>
-      </View>
-
-      <View style={styles.primaryCtaRow}>
-        <Link href="/(auth)/login" asChild>
-          <Pressable style={styles.primarySecondary}>
-            <Text style={styles.primarySecondaryText}>Login</Text>
-          </Pressable>
-        </Link>
-        <Link href="/(auth)/register" asChild>
-          <Pressable style={styles.primaryMain}>
-            <Ionicons name="arrow-forward" size={18} color={colors.white} />
-            <Text style={styles.primaryMainText}>Register</Text>
-          </Pressable>
-        </Link>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Explore by exam</Text>
-        <Text style={styles.sectionAction}>{examItems.length ? `${examItems.length} live` : ""}</Text>
-      </View>
-
-      {examItems.length ? (
-        <View style={styles.categoryRow}>
-          {examItems.map((item) => (
-            <View key={item.id} style={styles.categoryItem}>
-              <View style={styles.categoryIcon}>
-                <Ionicons name={examIcon(item.name)} size={20} color={colors.accentStrong} />
+      <View style={styles.sectionBlock}>
+        <SectionTitle>Top Performers</SectionTitle>
+        <View style={styles.listCard}>
+          {leaderboardPreview.map((entry, index) => (
+            <View key={entry.rank} style={[styles.leaderboardRow, index > 0 ? styles.rowDivider : null]}>
+              <View style={[styles.rankCircle, { backgroundColor: `${entry.tone}20` }]}>
+                <Text style={[styles.rankCircleText, { color: entry.tone }]}>#{entry.rank}</Text>
               </View>
-              <Text style={styles.categoryLabel} numberOfLines={2}>
-                {item.name}
-              </Text>
-              <Text style={styles.categoryMeta}>{item.subject_count} subjects</Text>
+              <View style={styles.leaderboardCopy}>
+                <Text style={styles.leaderboardName}>{entry.name}</Text>
+              </View>
+              <Text style={styles.leaderboardScore}>{entry.score}</Text>
             </View>
           ))}
         </View>
-      ) : (
-        <View style={styles.categoryFallback}>
-          <Text style={styles.categoryFallbackText}>{examError || "Loading admin-created exams..."}</Text>
-        </View>
-      )}
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Simple flow</Text>
-        <Text style={styles.sectionAction}>3 steps</Text>
+        <Text style={styles.helperText}>You&apos;re unranked — take a test to get your rank</Text>
       </View>
 
-      <LinearGradient colors={["#fff6ee", "#ffffff"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.journeyList}>
-        <View style={styles.journeyHeaderBand}>
-          <Text style={styles.journeyHeaderTitle}>From first tap to first result</Text>
-          <Text style={styles.journeyHeaderCopy}>A fast path built for students who just want to begin.</Text>
+      <View style={styles.sectionBlock}>
+        <SectionTitle>Daily Practice 🔥</SectionTitle>
+        <View style={styles.practiceCard}>
+          <Text style={styles.practiceCopy}>Solve 5 questions daily and build your streak.</Text>
+          <Text style={styles.streakHook}>Don&apos;t break your streak 🔥</Text>
+        <Link href="/demo" asChild>
+          <Pressable style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>Start Today</Text>
+          </Pressable>
+        </Link>
         </View>
-        {journeySteps.map((item, index) => (
-          <View key={item.title} style={[styles.journeyRow, index > 0 ? styles.journeyRowBorder : null]}>
-            <View style={styles.journeyStepRail}>
-              <View style={styles.journeyIndex}>
-                <Text style={styles.journeyIndexText}>{index + 1}</Text>
-              </View>
-              {index < journeySteps.length - 1 ? <View style={styles.journeyConnector} /> : null}
-            </View>
-            <View style={styles.journeyIconWrap}>
-              <Ionicons name={item.icon} size={18} color={colors.accentStrong} />
-            </View>
-            <View style={styles.journeyCopy}>
-              <Text style={styles.journeyTitle}>{item.title}</Text>
-              <Text style={styles.journeyMeta}>{item.copy}</Text>
-            </View>
-          </View>
-        ))}
-      </LinearGradient>
+      </View>
+
+      <View style={styles.finalCard}>
+        <Text style={styles.finalTitle}>See Your Rank Now</Text>
+        <Link href="/demo" asChild>
+          <Pressable style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>Start Free Test</Text>
+          </Pressable>
+        </Link>
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
   },
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: 12,
   },
   logoWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.white,
+    width: 48,
+    height: 48,
+    borderRadius: ui.radius.lg,
+    backgroundColor: ui.color.surface,
+    borderWidth: 1,
+    borderColor: "#E7EDF5",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.lineSoft,
   },
   logoImage: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
   },
-  brandLabel: {
-    color: colors.slate,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  brandValue: {
-    color: colors.ink,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  topIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff2e8",
-  },
-  heroBackground: {
-    marginHorizontal: -spacing.lg,
-    overflow: "hidden",
-    backgroundColor: "#fff3e7",
-    position: "relative",
-  },
-  heroBackdropImage: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: "100%",
-    height: "100%",
-  },
-  heroBanner: {
-    flexDirection: "row",
-    padding: spacing.lg,
-    minHeight: 176,
-    overflow: "hidden",
-    backgroundColor: "transparent",
-  },
-  heroCopy: {
+  brandCopy: {
     flex: 1,
-    gap: 10,
-    zIndex: 2,
-    paddingRight: 18,
-    justifyContent: "center",
+    gap: 2,
+  },
+  brandName: {
+    color: ui.color.primaryBlue,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  brandTagline: {
+    color: ui.color.textPrimary,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+  heroBlock: {
+    paddingTop: 6,
+    gap: 16,
+  },
+  heroBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: ui.radius.pill,
+    backgroundColor: ui.color.surfaceSoft,
+  },
+  heroBadgeText: {
+    color: ui.color.primaryBlue,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "500",
+    textTransform: "uppercase",
   },
   heroTitle: {
-    color: colors.ink,
-    fontSize: 20,
-    lineHeight: 25,
-    fontWeight: "900",
-    maxWidth: 210,
-  },
-  heroSubtext: {
-    color: colors.inkSoft,
-    fontSize: 12,
-    lineHeight: 18,
+    color: ui.color.textPrimary,
+    fontSize: 32,
+    lineHeight: 38,
     fontWeight: "700",
-    maxWidth: 205,
+    maxWidth: 280,
   },
-  primaryCtaRow: {
+  heroCopy: {
+    color: ui.color.textSecondary,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  heroTrustCopy: {
+    color: ui.color.primaryBlue,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: "500",
+    marginTop: -4,
+  },
+  heroActions: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: 12,
   },
-  primarySecondary: {
+  primaryButton: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: radii.pill,
+    minHeight: 52,
+    borderRadius: ui.radius.pill,
+    backgroundColor: ui.color.primaryOrange,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.white,
+  },
+  primaryButtonText: {
+    color: ui.color.surface,
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: ui.radius.pill,
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: colors.lineSoft,
-  },
-  primarySecondaryText: {
-    color: colors.ink,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  primaryMain: {
-    flex: 1.15,
-    minHeight: 48,
-    borderRadius: radii.pill,
+    borderColor: "#CBD5E1",
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-    backgroundColor: colors.accent,
   },
-  primaryMainText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: "800",
+  secondaryButtonText: {
+    color: ui.color.primaryBlue,
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: "600",
   },
-  heroArtwork: {
-    width: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    opacity: 0,
+  heroSocialProof: {
+    color: ui.color.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: "500",
   },
-  heroArtworkCircleLarge: {
-    position: "absolute",
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    right: -2,
-    top: 28,
-  },
-  heroArtworkCircleSmall: {
-    position: "absolute",
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    right: 26,
-    top: 14,
-  },
-  heroArtworkCard: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  heroArtworkLogo: {
-    width: 38,
-    height: 38,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 2,
+  sectionBlock: {
+    gap: 12,
+    marginTop: 10,
   },
   sectionTitle: {
-    color: colors.ink,
-    fontSize: 18,
-    fontWeight: "900",
+    color: ui.color.textPrimary,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "600",
   },
-  sectionAction: {
-    color: colors.accentStrong,
-    fontSize: 12,
-    fontWeight: "800",
+  listCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: ui.radius.lg,
+    borderWidth: 1,
+    borderColor: "#E9EEF5",
+    paddingHorizontal: 16,
   },
-  categoryRow: {
+  leaderboardRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  categoryItem: {
-    flex: 1,
     alignItems: "center",
-    gap: 8,
-  },
-  categoryIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff2e8",
-    borderWidth: 1,
-    borderColor: "rgba(251, 100, 4, 0.08)",
-  },
-  categoryLabel: {
-    color: colors.ink,
-    fontSize: 12,
-    fontWeight: "800",
-    textAlign: "center",
-    minHeight: 30,
-  },
-  categoryMeta: {
-    color: colors.slate,
-    fontSize: 10,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  categoryFallback: {
-    minHeight: 76,
-    borderRadius: radii.lg,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.lineSoft,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.md,
-  },
-  categoryFallbackText: {
-    color: colors.slate,
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  journeyList: {
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.lineSoft,
-    overflow: "hidden",
-    paddingVertical: spacing.xs,
-  },
-  journeyHeaderBand: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: 4,
-  },
-  journeyHeaderTitle: {
-    color: colors.ink,
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  journeyHeaderCopy: {
-    color: colors.slate,
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "700",
-  },
-  journeyRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    gap: 12,
     paddingVertical: 14,
   },
-  journeyRowBorder: {
+  rowDivider: {
     borderTopWidth: 1,
-    borderTopColor: "rgba(16, 62, 111, 0.06)",
+    borderTopColor: ui.color.divider,
   },
-  journeyStepRail: {
-    alignItems: "center",
-    width: 42,
-  },
-  journeyIndex: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  rankCircle: {
+    minWidth: 42,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: ui.radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.accent,
-    ...{
-      shadowColor: colors.accent,
-      shadowOpacity: 0.18,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 3,
-    },
   },
-  journeyIndexText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  journeyConnector: {
-    width: 2,
-    flex: 1,
-    minHeight: 30,
-    marginTop: 6,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(251, 100, 4, 0.18)",
-  },
-  journeyIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff2e8",
-    borderWidth: 1,
-    borderColor: "rgba(251, 100, 4, 0.08)",
-  },
-  journeyCopy: {
-    flex: 1,
-    paddingTop: 2,
-  },
-  journeyTitle: {
-    color: colors.ink,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  journeyMeta: {
-    color: colors.slate,
+  rankCircleText: {
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 4,
+    fontWeight: "600",
+  },
+  leaderboardCopy: {
+    flex: 1,
+  },
+  leaderboardName: {
+    color: ui.color.textPrimary,
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: "600",
+  },
+  leaderboardScore: {
+    color: ui.color.textPrimary,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "600",
+  },
+  helperText: {
+    color: ui.color.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  practiceCard: {
+    backgroundColor: "#FFFBF7",
+    borderRadius: ui.radius.lg,
+    borderWidth: 1,
+    borderColor: "#FCE4C8",
+    padding: 16,
+    gap: 14,
+  },
+  practiceCopy: {
+    color: ui.color.textSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  streakHook: {
+    color: ui.color.primaryOrange,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: "600",
+    marginTop: -4,
+  },
+  finalCard: {
+    backgroundColor: "#FCFDFE",
+    borderRadius: ui.radius.lg,
+    borderWidth: 1,
+    borderColor: "#EEF2F7",
+    padding: 16,
+    gap: 12,
+    marginTop: 10,
+  },
+  finalTitle: {
+    color: ui.color.textPrimary,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "600",
   },
 });

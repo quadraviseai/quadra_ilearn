@@ -9,7 +9,7 @@ function AppLoader({ label = "Preparing your workspace", detail = "Loading Quadr
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={[StyleSheet.absoluteFill, styles.pointerEventsNone]}>
         <View style={styles.glowTop} />
         <View style={styles.glowMid} />
         <View style={styles.glowBottom} />
@@ -111,6 +111,9 @@ const styles = StyleSheet.create({
     height: 260,
     borderRadius: radii.pill,
     backgroundColor: colors.goldOverlay,
+  },
+  pointerEventsNone: {
+    pointerEvents: "none",
   },
 });
 

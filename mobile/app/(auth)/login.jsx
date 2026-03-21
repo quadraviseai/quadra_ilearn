@@ -1,27 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { makeRedirectUri } from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
-import { Link, useRouter } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
+import { clearPendingAuthRedirect, getPendingAuthRedirect, setPendingAuthRedirect } from "../../src/lib/authRedirect";
+import {
+  buildNativeGoogleRedirect,
+  clearPendingGoogleAuth,
+  DEFAULT_GOOGLE_ANDROID_CLIENT_ID,
+  DEFAULT_GOOGLE_IOS_CLIENT_ID,
+  DEFAULT_GOOGLE_WEB_CLIENT_ID,
+  setPendingGoogleAuth,
+} from "../../src/lib/googleAuth";
 import { colors, radii, shadows, spacing } from "../../src/theme";
 
 WebBrowser.maybeCompleteAuthSession();
-
-const DEFAULT_GOOGLE_WEB_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
-const DEFAULT_GOOGLE_ANDROID_CLIENT_ID = "52499757157-6724lll0jek5os124d8jctg11kfjhrck.apps.googleusercontent.com";
-const DEFAULT_GOOGLE_IOS_CLIENT_ID = "52499757157-mr3kcemi7o13gilv87oqvrr0p8p9jvkv.apps.googleusercontent.com";
-
-function buildNativeGoogleRedirect(clientId) {
-  const compactClientId = String(clientId || "").trim().replace(/\.apps\.googleusercontent\.com$/i, "");
-  if (!compactClientId) {
-    return undefined;
-  }
-  return `com.googleusercontent.apps.${compactClientId}:/oauthredirect`;
-}
 
 function routeForRole(role) {
   if (role === "admin") {
@@ -32,6 +29,7 @@ function routeForRole(role) {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { login, authenticateWithGoogle, logout } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,6 +62,16 @@ export default function LoginScreen() {
       nonce,
     },
   );
+  const redirectPath = typeof params.redirect === "string" && params.redirect ? params.redirect : "";
+  const preferredMode = typeof params.mode === "string" ? params.mode : "";
+  const shouldAutoLaunchGoogle = preferredMode === "google";
+
+  useEffect(() => {
+    if (!redirectPath) {
+      return;
+    }
+    void setPendingAuthRedirect(redirectPath);
+  }, [redirectPath]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -75,7 +83,9 @@ export default function LoginScreen() {
         setError("Guardian accounts are not supported in this mobile app.");
         return;
       }
-      router.replace(routeForRole(session.user.role));
+      const nextPath = redirectPath || (await getPendingAuthRedirect()) || routeForRole(session.user.role);
+      await clearPendingAuthRedirect();
+      router.replace(nextPath);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -97,7 +107,7 @@ export default function LoginScreen() {
         return;
       }
 
-      const credential = googleResponse.params?.id_token;
+      const credential = googleResponse.params?.id_token || googleResponse.authentication?.idToken;
       if (!credential) {
         setError("Google did not return an ID token.");
         setGoogleLoading(false);
@@ -114,7 +124,10 @@ export default function LoginScreen() {
           setError("Guardian accounts are not supported in this mobile app.");
           return;
         }
-        router.replace(routeForRole(session.user.role));
+        const nextPath = redirectPath || (await getPendingAuthRedirect()) || routeForRole(session.user.role);
+        await clearPendingGoogleAuth();
+        await clearPendingAuthRedirect();
+        router.replace(nextPath);
       } catch (requestError) {
         setError(requestError.message);
       } finally {
@@ -123,18 +136,32 @@ export default function LoginScreen() {
     };
 
     completeGoogleLogin();
-  }, [authenticateWithGoogle, googleResponse, logout, router]);
+  }, [authenticateWithGoogle, googleResponse, logout, redirectPath, router]);
 
   const handleGoogleLogin = async () => {
     if (!googleRequest) {
-      setError("Google sign-in is not ready yet.");
       return;
     }
 
     setError("");
     setGoogleLoading(true);
+    if (Platform.OS !== "web") {
+      await setPendingGoogleAuth({
+        intent: "login",
+        redirectPath,
+        codeVerifier: googleRequest.codeVerifier || "",
+        redirectUri: googleRedirectUri,
+      });
+    }
     await promptAsync();
   };
+
+  useEffect(() => {
+    if (!shouldAutoLaunchGoogle || !googleRequest || googleLoading) {
+      return;
+    }
+    handleGoogleLogin();
+  }, [googleLoading, googleRequest, shouldAutoLaunchGoogle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Screen>
@@ -187,7 +214,7 @@ export default function LoginScreen() {
 
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Don't have an account? </Text>
-              <Link href="/(auth)/register" style={styles.link}>
+              <Link href={redirectPath ? { pathname: "/(auth)/register", params: { redirect: redirectPath } } : "/(auth)/register"} style={styles.link}>
                 Sign up
               </Link>
             </View>

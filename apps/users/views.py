@@ -1,10 +1,13 @@
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.db import transaction
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from urllib.parse import urlencode
+import smtplib
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -22,7 +25,17 @@ def build_client_url(base_url, path, **params):
     return f"{base_url}{separator}{path.lstrip('/')}" + (f"?{query}" if query else "")
 
 
+def ensure_email_delivery_configured():
+    backend = (settings.EMAIL_BACKEND or "").strip()
+    if backend != "django.core.mail.backends.smtp.EmailBackend":
+        return
+
+    if not (settings.EMAIL_HOST_USER or "").strip() or not (settings.EMAIL_HOST_PASSWORD or "").strip():
+        raise ImproperlyConfigured("SMTP credentials are missing.")
+
+
 def send_verification_email(user):
+    ensure_email_delivery_configured()
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     web_url = build_client_url(settings.FRONTEND_BASE_URL.rstrip("/"), "/verify-email", uid=uid, token=token)
@@ -43,6 +56,7 @@ def send_verification_email(user):
 
 
 def send_registration_alert_email(user):
+    ensure_email_delivery_configured()
     recipient = getattr(settings, "REGISTRATION_ALERT_EMAIL", "").strip()
     if not recipient:
         return
@@ -61,6 +75,7 @@ def send_registration_alert_email(user):
 
 
 def send_password_reset_email(user):
+    ensure_email_delivery_configured()
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     web_url = build_client_url(settings.FRONTEND_BASE_URL.rstrip("/"), "/reset-password", uid=uid, token=token)
@@ -83,11 +98,23 @@ class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        send_verification_email(user)
-        send_registration_alert_email(user)
+        try:
+            with transaction.atomic():
+                serializer = RegisterSerializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                user = serializer.save()
+                send_verification_email(user)
+                send_registration_alert_email(user)
+        except (ImproperlyConfigured, smtplib.SMTPException, OSError):
+            return Response(
+                {
+                    "detail": (
+                        "Verification email could not be sent because SMTP is not configured correctly on the server. "
+                        "Set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD, then try again."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response(
             {
                 "message": "Registration successful. Check your email to verify the account.",
@@ -156,7 +183,17 @@ class ForgotPasswordView(APIView):
 
         user = User.objects.filter(email=email).first()
         if user:
-            send_password_reset_email(user)
+            try:
+                send_password_reset_email(user)
+            except (ImproperlyConfigured, smtplib.SMTPException, OSError):
+                return Response(
+                    {
+                        "detail": (
+                            "Password reset email could not be sent because SMTP is not configured correctly on the server."
+                        )
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
         return Response(
             {"message": "If an account exists for this email, a password reset link has been sent."},

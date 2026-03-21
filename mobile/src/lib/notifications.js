@@ -24,6 +24,10 @@ function getProjectId() {
 }
 
 export async function registerForPushNotificationsAsync() {
+  if (Platform.OS === "web") {
+    return null;
+  }
+
   if (!Device.isDevice) {
     return null;
   }
@@ -68,6 +72,10 @@ export async function syncPushDevice(expoPushToken) {
 }
 
 export function attachNotificationHandlers(onRouteRequest) {
+  if (Platform.OS === "web") {
+    return () => {};
+  }
+
   const receivedSub = Notifications.addNotificationReceivedListener(() => {});
   const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response?.notification?.request?.content?.data || {};
