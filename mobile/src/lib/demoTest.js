@@ -167,7 +167,7 @@ export function buildDemoResult() {
     Math.max(1, Math.floor((Date.now() - currentSession.startedAt) / 1000)),
   );
   const accuracy = questions.length > 0 ? correct / questions.length : 0;
-  const betterThan = Math.max(18, Math.min(96, Math.round(24 + accuracy * 72)));
+  const betterThan = Math.max(0, Math.min(100, Math.round(accuracy * 100)));
   const estimatedRank = Math.max(12, Math.round((100 - betterThan) * 23));
   const weakTopics = questions
     .filter((question) => {

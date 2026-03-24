@@ -6,6 +6,16 @@ import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
 import { buildDemoResult, getDemoQuestions, hydrateDemoSession, resetDemoSession, startDemoSession } from "../../src/lib/demoTest";
 
+function formatElapsedTime(seconds) {
+  const safe = Math.max(0, Number(seconds || 0));
+  const minutes = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  if (!minutes) {
+    return `${remainder}s`;
+  }
+  return `${minutes}m ${remainder}s`;
+}
+
 export default function DemoFullReportScreen() {
   const router = useRouter();
   const { isAuthenticated, ready } = useAuth();
@@ -59,7 +69,7 @@ export default function DemoFullReportScreen() {
   }
 
   const accuracy = Math.round((result.correct / result.totalQuestions) * 100);
-  const timeLabel = `${result.elapsedSeconds}s`;
+  const timeLabel = formatElapsedTime(result.elapsedSeconds);
   const targetAccuracy = Math.min(90, accuracy + 27);
   const projectedTopBand = Math.max(10, 60 - Math.round(accuracy / 2));
   const weakTopic = result.weakTopics[0];
@@ -97,7 +107,7 @@ export default function DemoFullReportScreen() {
           </View>
           <View style={[styles.statCard, styles.timeCard]}>
             <Text style={styles.statLabel}>Time</Text>
-            <Text style={styles.statValue}>{timeLabel}</Text>
+            <Text style={[styles.statValue, styles.timeStatValue]}>{timeLabel}</Text>
           </View>
         </View>
 
@@ -274,6 +284,10 @@ const styles = StyleSheet.create({
     fontSize: 21,
     lineHeight: 26,
     fontWeight: "800",
+  },
+  timeStatValue: {
+    fontSize: 17,
+    lineHeight: 22,
   },
   sectionCard: {
     backgroundColor: "#FFFFFF",

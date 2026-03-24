@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { AppState, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import Screen from "../../src/components/Screen";
 import { answerDemoQuestion, buildDemoResult, getDemoQuestions, getDemoSession, getRemainingDemoSeconds, hydrateDemoSession } from "../../src/lib/demoTest";
@@ -13,6 +13,61 @@ function formatTimer(seconds) {
 }
 
 const OPTION_KEYS = ["A", "B", "C", "D"];
+const TO_SUPERSCRIPT = {
+  "0": "⁰",
+  "1": "¹",
+  "2": "²",
+  "3": "³",
+  "4": "⁴",
+  "5": "⁵",
+  "6": "⁶",
+  "7": "⁷",
+  "8": "⁸",
+  "9": "⁹",
+  "+": "⁺",
+  "-": "⁻",
+  "=": "⁼",
+  "(": "⁽",
+  ")": "⁾",
+  n: "ⁿ",
+};
+const TO_SUBSCRIPT = {
+  "0": "₀",
+  "1": "₁",
+  "2": "₂",
+  "3": "₃",
+  "4": "₄",
+  "5": "₅",
+  "6": "₆",
+  "7": "₇",
+  "8": "₈",
+  "9": "₉",
+  "+": "₊",
+  "-": "₋",
+  "=": "₌",
+  "(": "₍",
+  ")": "₎",
+};
+function renderPromptText(text) {
+  return normalizeScriptNotation(String(text || ""));
+}
+
+function mapToScript(value, mapping) {
+  return Array.from(String(value || ""))
+    .map((char) => mapping[char] || char)
+    .join("");
+}
+
+function normalizeScriptNotation(text) {
+  return String(text || "")
+    .replace(/sqrt\(([^)]+)\)/gi, "√($1)")
+    .replace(/<sup>(.*?)<\/sup>/gi, (_, value) => mapToScript(value, TO_SUPERSCRIPT))
+    .replace(/<sub>(.*?)<\/sub>/gi, (_, value) => mapToScript(value, TO_SUBSCRIPT))
+    .replace(/\^\{([^}]+)\}/g, (_, value) => mapToScript(value, TO_SUPERSCRIPT))
+    .replace(/_\{([^}]+)\}/g, (_, value) => mapToScript(value, TO_SUBSCRIPT))
+    .replace(/\^([0-9n()+\-=]+)/g, (_, value) => mapToScript(value, TO_SUPERSCRIPT))
+    .replace(/_([0-9()+\-=]+)/g, (_, value) => mapToScript(value, TO_SUBSCRIPT));
+}
 
 export default function DemoTestScreen() {
   const router = useRouter();
@@ -101,17 +156,21 @@ export default function DemoTestScreen() {
   const isLastQuestion = index === questions.length - 1;
   const progressValue = ((index + 1) / questions.length) * 100;
   const timerStyle = remainingSeconds <= 10 ? styles.timerDanger : remainingSeconds <= 20 ? styles.timerWarn : null;
+  const handleAdvance = () => {
+    if (isLastQuestion) {
+      buildDemoResult();
+      router.replace("/demo/result");
+      return;
+    }
+
+    router.replace(`/demo/test?index=${index + 1}`);
+  };
 
   return (
     <Screen scroll={false} topPadding={0} horizontalPadding={0}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <View style={styles.headerBrand}>
-              <View style={styles.logoWrap}>
-                <Image source={require("../../assets/quadravise-logo.png")} style={styles.logo} resizeMode="contain" />
-              </View>
-            </View>
             <View style={styles.headerMeta}>
               <Text style={styles.progressText}>Q{index + 1} of {questions.length}</Text>
               <Text style={[styles.timer, timerStyle]}>⏱ {formatTimer(remainingSeconds)}</Text>
@@ -136,7 +195,7 @@ export default function DemoTestScreen() {
 
           <View style={styles.questionBlock}>
             <Text style={styles.questionLabel}>Q{index + 1}.</Text>
-            <Text style={styles.questionText}>{currentQuestion.prompt}</Text>
+            <Text style={styles.questionText}>{renderPromptText(currentQuestion.prompt)}</Text>
           </View>
 
           <View style={styles.options}>
@@ -161,7 +220,9 @@ export default function DemoTestScreen() {
                       {OPTION_KEYS[optionIndex] || option.id.toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={[styles.optionLabel, selected ? styles.optionLabelActive : null]}>{option.label}</Text>
+                  <Text style={[styles.optionLabel, selected ? styles.optionLabelActive : null]}>
+                    {normalizeScriptNotation(option.label)}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -173,27 +234,33 @@ export default function DemoTestScreen() {
             <Text style={styles.helperIcon}>⚡</Text>
             <Text style={styles.helper}>Your answer is saved</Text>
           </View>
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              !selectedOptionId ? styles.disabled : null,
-              pressed && selectedOptionId ? styles.primaryButtonPressed : null,
-            ]}
-            disabled={!selectedOptionId}
-            onPress={() => {
-              if (!selectedOptionId) {
-                return;
-              }
-              if (isLastQuestion) {
-                buildDemoResult();
-                router.replace("/demo/result");
-                return;
-              }
-              router.replace(`/demo/test?index=${index + 1}`);
-            }}
-          >
-            <Text style={styles.primaryButtonText}>{isLastQuestion ? "Submit Test" : "Next Question"}</Text>
-          </Pressable>
+          <View style={styles.actionRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed ? styles.secondaryButtonPressed : null,
+              ]}
+              onPress={handleAdvance}
+            >
+              <Text style={styles.secondaryButtonText}>Skip</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                !selectedOptionId ? styles.disabled : null,
+                pressed && selectedOptionId ? styles.primaryButtonPressed : null,
+              ]}
+              disabled={!selectedOptionId}
+              onPress={() => {
+                if (!selectedOptionId) {
+                  return;
+                }
+                handleAdvance();
+              }}
+            >
+              <Text style={styles.primaryButtonText}>{isLastQuestion ? "Submit Test" : "Next Question"}</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Screen>
@@ -218,23 +285,7 @@ const styles = StyleSheet.create({
     minHeight: 32,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerBrand: {
-    width: 32,
-    alignItems: "flex-start",
-    justifyContent: "center",
-  },
-  logoWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logo: {
-    width: 22,
-    height: 22,
+    justifyContent: "flex-end",
   },
   headerMeta: {
     flexDirection: "row",
@@ -292,18 +343,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   questionBlock: {
-    gap: 6,
+    gap: 8,
+    paddingBottom: 4,
   },
   questionLabel: {
     color: "#1D4E89",
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "800",
   },
   questionText: {
     color: "#0F172A",
-    fontSize: 15,
-    lineHeight: 24,
-    fontWeight: "600",
+    fontSize: 18,
+    lineHeight: 28,
+    fontWeight: "700",
   },
   options: {
     gap: 8,
@@ -370,6 +422,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
     gap: 8,
   },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   helperRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -386,6 +443,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   primaryButton: {
+    flex: 1.35,
     minHeight: 46,
     borderRadius: 999,
     backgroundColor: "#FF7A00",
@@ -403,6 +461,24 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "700",
+  },
+  secondaryButton: {
+    flex: 0.85,
+    minHeight: 46,
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonPressed: {
+    opacity: 0.88,
+  },
+  secondaryButtonText: {
+    color: "#1D4E89",
+    fontSize: 15,
     fontWeight: "700",
   },
   disabled: {

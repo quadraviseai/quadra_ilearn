@@ -12,6 +12,7 @@ function Screen({
   refreshControl,
   topPadding = spacing.md,
   horizontalPadding = spacing.lg,
+  backgroundColor = colors.cloud,
 }) {
   const insets = useSafeAreaInsets();
 
@@ -21,7 +22,7 @@ function Screen({
 
   const content = scroll ? (
     <ScrollView
-      style={styles.scroll}
+      style={[styles.scroll, { backgroundColor }]}
       contentContainerStyle={[
         styles.content,
         {
@@ -41,6 +42,7 @@ function Screen({
         styles.content,
         styles.staticContent,
         {
+          backgroundColor,
           paddingTop: topPadding,
           paddingBottom: spacing.xxl + insets.bottom + 84,
           paddingHorizontal: horizontalPadding,
@@ -52,7 +54,7 @@ function Screen({
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
       <StatusBar style="dark" />
       {content}
     </SafeAreaView>

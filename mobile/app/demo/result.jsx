@@ -1,26 +1,53 @@
-import { Share, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Image } from "react-native";
 
 import Screen from "../../src/components/Screen";
 import { buildDemoResult, getDemoQuestions, resetDemoSession, startDemoSession } from "../../src/lib/demoTest";
 
-function getResultMood(correct, total) {
-  const ratio = total > 0 ? correct / total : 0;
-  if (ratio >= 0.8) {
-    return {
-      title: "Excellent 🔥",
-    };
+function getAccuracy(correct, total) {
+  if (!total) {
+    return 0;
   }
-  if (ratio >= 0.5) {
-    return {
-      title: "Nice Work 👍",
-    };
+  return Math.round((correct / total) * 100);
+}
+
+function getMessage(accuracy) {
+  if (accuracy < 30) {
+    return "Require attention";
   }
-  return {
-    title: "Good Start 💪",
-  };
+  if (accuracy < 40) {
+    return "Good start";
+  }
+  if (accuracy < 50) {
+    return "Good going";
+  }
+  if (accuracy < 60) {
+    return "One more step";
+  }
+  if (accuracy <= 80) {
+    return "Dream comes to true";
+  }
+  return "You are rock";
+}
+
+function getCaption(accuracy) {
+  if (accuracy < 30) {
+    return "Your result needs attention. Focus on basics and weak topics before the next test.";
+  }
+  if (accuracy < 40) {
+    return "You have started the journey. Build consistency and improve topic clarity.";
+  }
+  if (accuracy < 50) {
+    return "You are moving in the right direction. A better revision cycle can lift your score.";
+  }
+  if (accuracy < 60) {
+    return "You are close to the next level. One more strong push can improve your rank.";
+  }
+  if (accuracy <= 80) {
+    return "Your progress is becoming real. Keep practicing smartly to turn this into a strong result.";
+  }
+  return "This is an excellent result. Keep the momentum and sharpen the final few weak areas.";
 }
 
 export default function DemoResultScreen() {
@@ -32,111 +59,64 @@ export default function DemoResultScreen() {
     return null;
   }
 
-  const mood = getResultMood(result.correct, result.totalQuestions);
-  const higherPercent = Math.max(0, 100 - result.betterThan);
+  const accuracy = getAccuracy(result.correct, result.totalQuestions);
+  const message = getMessage(accuracy);
+  const caption = getCaption(accuracy);
+  const progressRatio = Math.max(0, Math.min(accuracy, 100)) / 100;
+  const mainArcScale = progressRatio <= 0 ? 0 : Math.max(0.08, Math.min(progressRatio / 0.72, 1));
+  const accentArcScale = progressRatio <= 0.72 ? 0 : Math.max(0, Math.min((progressRatio - 0.72) / 0.28, 1));
+
+  const handlePracticeAgain = () => {
+    const examName = result.examName;
+    const questions = getDemoQuestions();
+    resetDemoSession();
+    startDemoSession(examName, {
+      examId: result.examId,
+      questionCount: result.totalQuestions,
+      questions,
+    });
+    router.replace("/demo/test?index=0");
+  };
 
   return (
-    <Screen>
+    <Screen backgroundColor="#F4F7FC">
       <View style={styles.wrap}>
-        <View style={styles.hero}>
-          <View style={styles.brandRow}>
-            <View style={styles.logoWrap}>
-              <Image source={require("../../assets/quadravise-logo.png")} style={styles.logo} resizeMode="contain" />
+        <View style={styles.card}>
+          <View style={styles.sparkleOne} />
+          <View style={styles.sparkleTwo} />
+          <View style={styles.sparkleThree} />
+          <View style={styles.sparkleFour} />
+
+          <View style={styles.ringWrap}>
+            <View style={styles.ringOuter}>
+              <View style={styles.ringTrack} />
+              <View style={[styles.ringProgressMain, { opacity: progressRatio > 0 ? 1 : 0, transform: [{ rotate: "-20deg" }, { scaleX: mainArcScale }] }]} />
+              <View style={[styles.ringProgressAccent, { opacity: progressRatio > 0.72 ? 1 : 0, transform: [{ rotate: "-20deg" }, { scaleX: accentArcScale || 0.01 }] }]} />
+              <View style={styles.ringMiddle}>
+                <View style={styles.ringInner}>
+                  <Text style={styles.percent}>{accuracy}%</Text>
+                  <View style={styles.innerDivider} />
+                  <Text style={styles.title}>{message}</Text>
+                </View>
+              </View>
             </View>
-            <Text style={styles.brandText}>QuadraILearn</Text>
+
+            <View style={styles.medalBadge}>
+              <Ionicons name="ribbon" size={30} color="#F59E0B" />
+            </View>
           </View>
-          <Text style={styles.moodTitle}>{mood.title}</Text>
-          <Text style={styles.scoreLabel}>Your Score</Text>
-          <Text style={styles.scoreValue}>{result.correct} / {result.totalQuestions}</Text>
-          <View style={styles.rankStrip}>
-            <Text style={styles.rankHook}>🔥 You beat {result.betterThan}% of students</Text>
-          </View>
-          <Text style={styles.rankSubtext}>Only {higherPercent}% scored higher than you.</Text>
+
+          <Text style={styles.headingText}>{accuracy}%</Text>
+          <Text style={styles.caption}>{caption}</Text>
+
+          <Pressable style={styles.primaryButton} onPress={() => router.push("/demo/full-report")}>
+            <Text style={styles.primaryButtonText}>View my weakness</Text>
+          </Pressable>
+
+          <Pressable style={styles.secondaryLink} onPress={handlePracticeAgain}>
+            <Text style={styles.secondaryLinkText}>Practice again</Text>
+          </Pressable>
         </View>
-
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, styles.correctCard]}>
-            <Text style={styles.statLabel}>Correct</Text>
-            <Text style={styles.statValue}>{result.correct}</Text>
-          </View>
-          <View style={[styles.statCard, styles.wrongCard]}>
-            <Text style={styles.statLabel}>Wrong</Text>
-            <Text style={styles.statValue}>{result.wrong}</Text>
-          </View>
-          <View style={[styles.statCard, styles.timeCard]}>
-            <Text style={styles.statLabel}>Time</Text>
-            <Text style={styles.statValue}>{result.elapsedSeconds}s</Text>
-          </View>
-        </View>
-
-        <View style={styles.improveCard}>
-          <Text style={styles.improveTitle}>See where you stand and improve faster</Text>
-          <Text style={styles.improveBoost}>You can improve by +15% with focused practice.</Text>
-        </View>
-
-        <View style={styles.lockCard}>
-          <View style={styles.lockHeader}>
-            <View style={styles.lockIconWrap}>
-              <Ionicons name="lock-closed" size={16} color="#1D4E89" />
-            </View>
-            <View style={styles.lockCopy}>
-              <Text style={styles.lockTitle}>Unlock Your Full Report</Text>
-              <Text style={styles.lockSubtext}>See exactly where you stand and how to improve.</Text>
-              <Text style={styles.unlockPrompt}>Your rank is ready - unlock now</Text>
-            </View>
-          </View>
-
-          <View style={styles.lockList}>
-            <View style={styles.lockItem}>
-              <Text style={styles.lockBullet}>•</Text>
-              <Text style={styles.lockLine}>Your exact rank</Text>
-            </View>
-            <View style={styles.lockItem}>
-              <Text style={styles.lockBullet}>•</Text>
-              <Text style={styles.lockLine}>Weak topics</Text>
-            </View>
-            <View style={styles.lockItem}>
-              <Text style={styles.lockBullet}>•</Text>
-              <Text style={styles.lockLine}>AI explanations</Text>
-            </View>
-            <View style={styles.lockItem}>
-              <Text style={styles.lockBullet}>•</Text>
-              <Text style={styles.lockLine}>Improvement plan</Text>
-            </View>
-          </View>
-        </View>
-
-        <Pressable style={styles.primaryButton} onPress={() => router.push("/demo/unlock")}>
-          <Text style={styles.primaryButtonText}>Unlock My Rank & Insights</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => {
-            const examName = result.examName;
-            const questions = getDemoQuestions();
-            resetDemoSession();
-            startDemoSession(examName, {
-              examId: result.examId,
-              questionCount: result.totalQuestions,
-              questions,
-            });
-            router.replace("/demo/test?index=0");
-          }}
-        >
-          <Text style={styles.secondaryButtonText}>Improve Your Score</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.textButton}
-          onPress={() =>
-            Share.share({
-              message: `I beat ${result.betterThan}% of students on the QuadraILearn quick test. Can you beat my rank?`,
-            })
-          }
-        >
-          <Text style={styles.textButtonText}>Share Your Rank</Text>
-        </Pressable>
       </View>
     </Screen>
   );
@@ -144,225 +124,212 @@ export default function DemoResultScreen() {
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: 18,
-    paddingTop: 10,
-  },
-  hero: {
-    gap: 6,
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 2,
-  },
-  logoWrap: {
-    width: 24,
-    height: 24,
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 24,
   },
-  logo: {
-    width: 24,
-    height: 24,
+  card: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 28,
+    paddingBottom: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E9EEF7",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+    overflow: "hidden",
   },
-  brandText: {
-    color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "700",
+  sparkleOne: {
+    position: "absolute",
+    top: 38,
+    left: 34,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#F7C95B",
   },
-  moodTitle: {
-    color: "#1D4E89",
-    fontSize: 18,
-    fontWeight: "700",
+  sparkleTwo: {
+    position: "absolute",
+    top: 64,
+    left: 52,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#FFE08A",
   },
-  scoreLabel: {
-    color: "#475569",
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
+  sparkleThree: {
+    position: "absolute",
+    top: 58,
+    right: 38,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#F8B84D",
   },
-  scoreValue: {
-    color: "#0F172A",
-    fontSize: 44,
-    lineHeight: 48,
+  sparkleFour: {
+    position: "absolute",
+    top: 90,
+    right: 24,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#FDE68A",
+  },
+  ringWrap: {
+    width: 214,
+    height: 214,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  ringOuter: {
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  ringTrack: {
+    position: "absolute",
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    borderWidth: 12,
+    borderColor: "#DCEAF9",
+  },
+  ringProgressMain: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    width: 166,
+    height: 166,
+    borderRadius: 83,
+    borderWidth: 12,
+    borderColor: "transparent",
+    borderTopColor: "#FFB347",
+    borderLeftColor: "#FFB347",
+  },
+  ringProgressAccent: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    width: 166,
+    height: 166,
+    borderRadius: 83,
+    borderWidth: 12,
+    borderColor: "transparent",
+    borderRightColor: "#FF8D34",
+  },
+  ringMiddle: {
+    width: 152,
+    height: 152,
+    borderRadius: 76,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#EEF2F7",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  ringInner: {
+    width: 136,
+    height: 136,
+    borderRadius: 68,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  percent: {
+    color: "#16356A",
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: "800",
-    textAlign: "center",
-    alignSelf: "center",
   },
-  rankStrip: {
-    alignSelf: "flex-start",
-    backgroundColor: "#FFF7ED",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 4,
-  },
-  rankHook: {
-    color: "#0F172A",
-    fontSize: 18,
-    lineHeight: 26,
-    fontWeight: "700",
-  },
-  rankSubtext: {
-    color: "#475569",
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 14,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    gap: 6,
-  },
-  correctCard: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#BBF7D0",
-  },
-  wrongCard: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
-  },
-  timeCard: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#BFDBFE",
-  },
-  statLabel: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  statValue: {
-    color: "#0F172A",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  improveCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    padding: 18,
-    gap: 8,
-  },
-  improveTitle: {
-    color: "#0F172A",
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: "700",
-  },
-  improveBoost: {
-    color: "#1D4E89",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  lockCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-    padding: 18,
-    gap: 14,
-  },
-  lockHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  lockIconWrap: {
-    width: 32,
-    height: 32,
+  innerDivider: {
+    width: 56,
+    height: 4,
     borderRadius: 999,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#F9B54C",
+    marginVertical: 8,
+  },
+  title: {
+    color: "#1B3B71",
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "700",
+  },
+  medalBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FFD166",
+    borderWidth: 4,
+    borderColor: "#F59E0B",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#F59E0B",
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
-  lockCopy: {
-    flex: 1,
-    gap: 5,
-  },
-  lockTitle: {
-    color: "#0F172A",
+  headingText: {
+    color: "#1E3A6D",
     fontSize: 18,
-    fontWeight: "700",
+    lineHeight: 24,
+    fontWeight: "800",
+    marginTop: -2,
   },
-  lockSubtext: {
-    color: "#475569",
+  caption: {
+    color: "#4D6281",
     fontSize: 14,
     lineHeight: 22,
-  },
-  lockItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-  },
-  lockBullet: {
-    color: "#1D4E89",
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: "700",
-  },
-  lockLine: {
-    flex: 1,
-    color: "#0F172A",
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "600",
-  },
-  unlockPrompt: {
-    color: "#1D4E89",
-    fontSize: 13,
-    fontWeight: "700",
-    marginTop: 2,
-  },
-  lockList: {
-    gap: 8,
+    textAlign: "center",
+    maxWidth: 258,
+    marginTop: 6,
   },
   primaryButton: {
-    minHeight: 56,
-    borderRadius: 999,
-    backgroundColor: "#FF7A00",
+    width: "100%",
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: "#FF8D34",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#FF7A00",
+    marginTop: 14,
+    shadowColor: "#FF8D34",
     shadowOpacity: 0.2,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
-    marginTop: 8,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
   },
-  secondaryButton: {
-    minHeight: 48,
-    borderRadius: 999,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    alignItems: "center",
-    justifyContent: "center",
+  secondaryLink: {
+    marginTop: 14,
   },
-  secondaryButtonText: {
-    color: "#1D4E89",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  textButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 6,
-  },
-  textButtonText: {
-    color: "#1D4E89",
+  secondaryLinkText: {
+    color: "#97A6BB",
     fontSize: 14,
-    fontWeight: "600",
+    lineHeight: 18,
+    fontWeight: "500",
   },
 });

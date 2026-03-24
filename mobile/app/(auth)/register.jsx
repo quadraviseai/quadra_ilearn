@@ -76,6 +76,7 @@ export default function RegisterScreen() {
     nonce,
   });
   const redirectPath = typeof params.redirect === "string" && params.redirect ? params.redirect : "";
+  const preferredMode = typeof params.mode === "string" ? params.mode : "";
 
   useEffect(() => {
     if (!redirectPath) {
@@ -83,6 +84,12 @@ export default function RegisterScreen() {
     }
     void setPendingAuthRedirect(redirectPath);
   }, [redirectPath]);
+
+  useEffect(() => {
+    if (preferredMode === "email") {
+      setEmailModalVisible(true);
+    }
+  }, [preferredMode]);
 
   const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 

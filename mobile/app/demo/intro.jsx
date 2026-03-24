@@ -80,7 +80,7 @@ export default function DemoIntroScreen() {
   }, [examId]);
 
   return (
-    <Screen topPadding={0} horizontalPadding={0} loading={examSetState.loading}>
+    <Screen topPadding={0} horizontalPadding={0} loading={examSetState.loading} backgroundColor="#DDECF4">
       <View style={styles.page}>
         <View style={styles.hero}>
           <Image source={heroImage} style={styles.heroImage} resizeMode="cover" />

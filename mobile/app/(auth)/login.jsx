@@ -4,6 +4,7 @@ import * as Google from "expo-auth-session/providers/google";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
 import Screen from "../../src/components/Screen";
 import { useAuth } from "../../src/context/AuthContext";
@@ -164,19 +165,38 @@ export default function LoginScreen() {
   }, [googleLoading, googleRequest, shouldAutoLaunchGoogle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Screen>
+    <Screen backgroundColor="#F5F7FA">
       <View style={styles.pageShell}>
-        <View style={styles.authCard}>
-          <View style={styles.logoRow}>
-            <Image source={require("../../assets/quadravise-logo.png")} style={styles.logoImage} resizeMode="contain" />
-            <Text style={styles.logoWordmark}>QuadraILearn</Text>
+        <View pointerEvents="none" style={styles.backgroundLayer}>
+          <LinearGradient colors={["#f7fbff", "#eef4fb", "#f8f3eb"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.backgroundGradient} />
+          <View style={styles.heroGlowPrimary} />
+          <View style={styles.heroGlowAccent} />
+          <View style={styles.heroGlowSoft} />
+        </View>
+
+        <View style={styles.heroShell}>
+          <View style={styles.topBar}>
+            <View style={styles.brandRow}>
+              <View style={styles.logoBadge}>
+                <Image source={require("../../assets/quadravise-logo.png")} style={styles.logoImage} resizeMode="contain" />
+              </View>
+              <View style={styles.brandCopy}>
+                <Text style={styles.logoWordmark}>QuadraILearn</Text>
+                <Text style={styles.brandSubtext}>Student learning and assessment platform</Text>
+              </View>
+            </View>
+            <Link href="/landing" style={styles.skipLink}>
+              Back
+            </Link>
           </View>
 
           <View style={styles.headerBlock}>
-            <Text style={styles.title}>Login to your Account</Text>
+            <Text style={styles.stepLabel}>Login</Text>
+            <Text style={styles.title}>Welcome back to QuadraILearn</Text>
+            <Text style={styles.heroCopy}>Sign in to continue your practice, track progress, and unlock your full performance insights.</Text>
           </View>
 
-          <View style={styles.formCard}>
+          <View style={styles.formPanel}>
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -233,69 +253,155 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   pageShell: {
-    minHeight: 640,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.lg,
+    minHeight: 720,
+    paddingTop: 8,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: 10,
+    position: "relative",
   },
-  authCard: {
+  backgroundLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  backgroundGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroGlowPrimary: {
+    position: "absolute",
+    top: -40,
+    right: -10,
+    width: 260,
+    height: 260,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(20, 87, 154, 0.10)",
+  },
+  heroGlowAccent: {
+    position: "absolute",
+    left: -40,
+    top: 220,
+    width: 190,
+    height: 190,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(251, 100, 4, 0.08)",
+  },
+  heroGlowSoft: {
+    position: "absolute",
+    right: -50,
+    bottom: 120,
+    width: 160,
+    height: 160,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(255,255,255,0.32)",
+  },
+  heroShell: {
+    flex: 1,
+    maxWidth: 390,
+    alignSelf: "center",
     width: "100%",
-    maxWidth: 360,
-    borderRadius: 32,
-    backgroundColor: "#fefefe",
-    paddingHorizontal: 22,
-    paddingVertical: 28,
-    gap: spacing.lg,
-    borderWidth: 1,
-    borderColor: "rgba(76, 99, 197, 0.08)",
-    ...shadows.card,
+    paddingHorizontal: 6,
+    paddingTop: 8,
+    gap: 24,
   },
-  logoRow: {
+  topBar: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    flex: 1,
+  },
+  logoBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
   },
   logoImage: {
     width: 30,
     height: 30,
   },
+  brandCopy: {
+    flex: 1,
+    gap: 2,
+  },
   logoWordmark: {
-    color: "#3048b9",
+    color: "#1D4E89",
     fontSize: 20,
     fontWeight: "800",
-    letterSpacing: 0.4,
+    letterSpacing: 0.1,
+  },
+  brandSubtext: {
+    color: "#627D98",
+    fontSize: 13,
+    lineHeight: 18,
+    maxWidth: 180,
+  },
+  skipLink: {
+    color: "#486581",
+    fontSize: 13,
+    fontWeight: "600",
+    paddingTop: 10,
   },
   headerBlock: {
-    gap: 4,
+    gap: 10,
+    maxWidth: "78%",
+    paddingTop: 8,
+  },
+  stepLabel: {
+    color: "#1D4E89",
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   title: {
-    color: "#2b3663",
-    fontSize: 20,
-    lineHeight: 25,
-    fontWeight: "700",
+    color: "#102A43",
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: "800",
+    letterSpacing: -0.6,
+    textAlign: "left",
   },
-  formCard: {
-    backgroundColor: "transparent",
-    borderRadius: 0,
-    padding: 0,
-    gap: spacing.md,
+  heroCopy: {
+    color: "#52606D",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  formPanel: {
+    marginTop: "auto",
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderRadius: 28,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    ...shadows.card,
   },
   input: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 15,
     paddingHorizontal: 16,
-    paddingVertical: 15,
+    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: "rgba(43, 54, 99, 0.08)",
-    color: "#24325d",
+    borderColor: "#E2E8F0",
+    color: "#243B53",
     fontSize: 14,
   },
   button: {
-    backgroundColor: "#3048b9",
+    backgroundColor: colors.accent,
     borderRadius: 16,
-    paddingVertical: 15,
+    minHeight: 52,
     alignItems: "center",
-    marginTop: 4,
+    justifyContent: "center",
+    marginTop: 2,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -311,7 +417,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   socialLabel: {
-    color: "#98a1c3",
+    color: "#94A3B8",
     fontSize: 12,
     textAlign: "center",
     marginTop: 4,
@@ -321,15 +427,15 @@ const styles = StyleSheet.create({
   },
   googleOnlyButton: {
     minWidth: 220,
-    minHeight: 46,
-    borderRadius: 23,
+    minHeight: 44,
+    borderRadius: 999,
     paddingHorizontal: 18,
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(43, 54, 99, 0.08)",
+    borderColor: "#E2E8F0",
     backgroundColor: "#ffffff",
   },
   googleGlyph: {
@@ -338,31 +444,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   googleOnlyText: {
-    color: "#3048b9",
-    fontWeight: "800",
+    color: "#1D4E89",
+    fontWeight: "700",
     fontSize: 14,
   },
   footerRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 4,
   },
   footerText: {
-    color: "#98a1c3",
+    color: "#94A3B8",
     fontSize: 12,
   },
   inlineLinks: {
     alignItems: "center",
-    marginTop: -4,
+    marginTop: -2,
   },
   inlineLink: {
-    color: "#3048b9",
+    color: "#1D4E89",
     fontWeight: "700",
     fontSize: 12,
   },
   link: {
-    color: "#3048b9",
+    color: "#1D4E89",
     fontWeight: "700",
     fontSize: 12,
   },
